@@ -124,6 +124,8 @@ void HinesMatrix::makeMatrix() {
 	double gi, gj, gij;
 	vector< JunctionStruct >::iterator junction = junction_.begin();
 	for ( unsigned int i = 0; i < nCompt_ - 1; ++i ) {
+		// Get compartment segments where there are no branches out of the way
+		// first.
 		if ( !junction_.empty() &&
 		     junction < junction_.end() &&
 		     i == junction->index )
@@ -141,6 +143,7 @@ void HinesMatrix::makeMatrix() {
 		HS_[ 4 * i + 6 ] += gij;
 	}
 	
+	// Now for the effects of branching on HS_
 	vector< vector< unsigned int > >::iterator group;
 	vector< unsigned int >::iterator i;
 	for ( group = coupled_.begin(); group != coupled_.end(); ++group ) {
