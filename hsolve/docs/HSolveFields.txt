@@ -1,0 +1,878 @@
+Members of the HSolve class and what they do
+===========================================
+
+Universal note: All ids are actually converted into local indexes before usage.
+
+class HSolve: public HSolveActive
+{
+	HSolve();
+		-> constructor
+	
+	void process( const Eref& hsolve, ProcPtr p );
+		-> called at each time step. This will need to be changed for the GPU
+		   version.
+	void reinit( const Eref& hsolve, ProcPtr p );
+		-> called to reinitialize the simulation. Some additions will need to be
+		   made for the GPU: data in the GPU will require cleanup.
+	
+	void setSeed( Id seed );
+	Id getSeed() const;
+		-> For searching for compartments - seed is the starting compt.
+	
+	void setPath( const Eref& e, const Qinfo* q, string path );
+	string getPath( const Eref& e, const Qinfo* q ) const;
+		-> Path to the compartments
+	
+	void setDt( double dt );
+	double getDt() const;
+		-> Simulation time step. May need to be conveyed to GPU. May not need
+		   to be conveyed actually, since all that matters is number of times
+		   the kernel is called. Kernel itself can be called from within a for
+		   loop. Kernel has to be on a single stream.
+	
+	void setCaAdvance( int caAdvance );
+	int getCaAdvance() const;
+		-> Use of this flag will require change of the GPU code itself. Need to
+		   compare CPU and GPU implementation of wherever this needs using.
+		   The flag will have to be passed to the GPU for each HSolve object.
+	
+	void setVDiv( int vDiv );
+	int getVDiv() const;
+		-> "Specifies number of divisions for lookup tables of voltage-sensitive
+		   channels."
+	
+	void setVMin( double vMin );
+	double getVMin() const;
+		-> "Specifies the lower bound for lookup tables of voltage-sensitive
+		   channels. Default is to automatically decide based on the tables of
+		   the channels that the solver reads in."
+
+	void setVMax( double vMax );
+	double getVMax() const;
+		-> Specifies the upper bound for lookup tables of voltage-sensitive
+		   channels. Default is to automatically decide based on the tables of
+		   the channels that the solver reads in."
+
+	void setCaDiv( int caDiv );
+	int getCaDiv() const;
+		-> Specifies number of divisions for lookup tables of calcium-sensitive
+		   channels."
+
+	void setCaMin( double caMin );
+	double getCaMin() const;
+		-> Similar
+	
+	void setCaMax( double caMax );
+	double getCaMax() const;
+		-> Similar
+	
+	--> The above 6 fields will have to be looked into while generating the
+	    said lookup tables. The size of these tables needs to be determined.
+	    It would be useful to find out if these tables would fit into the
+	    constant memory space for the sake of optimization. Note: constant
+	    memory size is only 64KB, even for compute capability 3.5!
+	
+	double getInitVm( Id id ) const;
+	void setInitVm( Id id, double value );
+		-> returns / sets tree_[ id ].initVm => Need to find out what tree_[id]
+		   stores. #TODO
+		   I believe tree_[ id ] stores the relevant compartment's info.
+		   initVm stores the intial Vm value for that compartment. It will
+		   be set as Vm on reinit.
+	
+	double getVm( Id id ) const;
+	void setVm( Id id, double value );
+		-> returns / sets V_[ id ] => Need to find out what V_ is storing.
+		   V_ stores compartment Vm values.
+	
+	double getCm( Id id ) const;
+	void setCm( Id id, double value );
+		-> tree_[ id ].Cm
+		   Cm is membrane capacitance
+	
+	double getEm( Id id ) const;
+	void setEm( Id id, double value );
+		-> tree_[ id ].Em
+		   Em is membrane leakage potential
+	
+	double getRm( Id id ) const;
+	void setRm( Id id, double value );
+		-> tree_[ id ].Rm
+		   Rm is membrane leakage resistance
+	
+	double getRa( Id id ) const;
+	void setRa( Id id, double value );
+		-> tree_[ id ].Ra
+		   Ra is axial resistance
+	
+	// Im is read-only
+	double getIm( Id id ) const;
+		-> compartment_[ id ].EmByRm - V_[ id ] / tree_[ id ].Rm; 
+		   for ( ; icurrent < currentBoundary_[ index ]; ++icurrent )
+		       Im += ( icurrent->Ek - V_[ index ] ) * icurrent->Gk;
+		   Need to understand how icurrent is initialized. For this I need to
+		   understand what current_ and currentBoundary_ contain. #TODO
+	
+	// Ia is read-only
+	double getIa( Id id ) const;
+		-> Returns 0! What on earth!?
+		   No axial currents? Why? #TODO
+	
+	double getInject( Id id ) const;
+	void setInject( Id id, double value );
+		-> 	inject_[ id ].injectBasal;
+		    where inject_ is a map of InjectStruct with unsigned int indices.
+		    Injected currents (experimental injection). InjectStruct stores
+		    two different kinds of injected currents - one is a "basal"
+		    injection, which the user sets at the start of the simulation, and
+		    remains constant as long as the simulation is running. The user
+		    could potentially run the simulation for N time steps, stop, change
+		    the value, and then resume, however.
+		    The second kind is a "varying" injection, meaning that it comes
+		    from some other part of moose via a message. So this thing has an
+		    associated destFinfo. injectVarying is set to zero at every time
+		    step.
+		    inject_ is a map because it only needs to store the ids of those
+		    compartments that have such external injections. Most compartments
+		    will not.
+	
+	void addInject( Id id, double value );
+		-> 	inject_[ index ].injectVarying += value;
+		    Refer above for more on inject_ and injectVarying
+	
+	void addGkEk( Id id, double v1, double v2 );
+		-> externalCurrent_[ 2 * index ] += Gk;
+		   externalCurrent_[ 2 * index + 1 ] += Gk * Ek;
+		   Need to figure out what externalCurrent_ is for this.
+		   externalCurrent is a current type that is associated with a channel
+		   that is not recognized by HSolve. So HSolve lets this channel do all
+		   of its processing on its own. => It is not zombified.
+	
+	/// Interface to channels
+	//~ const vector< Id >& getHHChannels() const;
+	void setPowers(
+		Id id,
+		double Xpower,
+		double Ypower,
+		double Zpower );
+		-> Sets the powers of an HH gate
+	
+	int getInstant( Id id ) const;
+	void setInstant( Id id, int instant );
+		-> channel_[ id ].instant_
+		   List of all channels in a compartment. Ca-dep channels and Vm-dep
+		   channels are not distinguished - they are all flattened.
+	
+	double getHHChannelGbar( Id id ) const;
+	void setHHChannelGbar( Id id, double value );
+		-> HHChannel's Gbar has to be got / set.
+		   At least this makes sense. Therefore, channel_ must contain the list
+		   of all channels from all compartments that this HSolve object has.
+	
+	double getEk( Id id ) const;
+	void setEk( Id id, double value );
+		-> Ek of the channel
+	
+	double getGk( Id id ) const;
+	void setGk( Id id, double value );
+		-> Gk of the channel
+	
+	// Ik is read-only
+	double getIk( Id id ) const;
+		-> comptIndex = chan2compt_[ id ]
+		   ( current_[ id ].Ek - V_[ comptIndex ] ) * current_[ id ].Gk;
+		   So now we know what chan2compt_ is doing. It has the index of the
+		   compartment to which a certain channel belongs.
+		   Also note that current_ is addressed using a channel index whereas
+		   V_ is addressed using a compartment index. V_ therefore stores the
+		   Vm value of each compartment.
+	
+	double getX( Id id ) const;
+	void setX( Id id, double value );
+		-> Returns 0 if channel_[ id ].Xpower is 0. Otherwise, it returns
+		   state_[ stateIndex ] where stateIndex = chan2state_[ index ];
+		   Cannot set state_[ stateIndex ] if Xpower is 0.
+		   chan2state converts the channel index into a state index somehow.
+		   state_ itself refers to the fraction of open gates in the HHChannel
+		   This particular function returns the fraction of open gates which
+		   are of type X.		   
+	
+	double getY( Id id ) const;
+	void setY( Id id, double value );
+		-> Exactly like getX and setX, except that the stateIndex is incremented
+		   if channel_[ id ].Xpower > 0. stateIndex has to be incremented
+		   because all the state values are just stored one after another in
+		   the same array.
+	
+	double getZ( Id id ) const;
+	void setZ( Id id, double value );
+		-> Exactly like X and Y. Except, now stateIndex receives an increment
+		   separately if Xpower > 0 and if Ypower > 0.
+		   Same story.
+	
+	/// Interface to CaConc
+	double getCa( Id id ) const;
+	void setCa( Id id, double Ca );
+		-> Gets from ca_[ id ]
+		   Sets in two places: ca_[ id ] = Ca; and caConc_[ id ].setCa( Ca );
+		   caConc_ is the full calcium pool data structure.
+		   ca_ stores the calcium concentration (c_ + caBasal_) to be used in
+		   the calcium dependent channels. It is stored this way for locality
+		   of reference, and because only the concentration value is required
+		   while doing channel computations.
+	
+	double getCaBasal( Id id ) const;
+	void setCaBasal( Id id, double CaBasal );
+		-> caConc_[ id ].CaBasal_
+		   Only this one this time around. Basal is the value set by the user, 
+		   I think. It doesn't change during the simulation(?)
+
+	void setTauB( Id id, double tau, double B );
+		-> caConc_[ index ].setTauB( tau, B, dt_ );
+		   Obviously some kind of rate constant. Need to figure this one out.
+		   #TODO
+	
+	double getCaCeiling( Id id ) const;
+	void setCaCeiling( Id id, double floor );
+		-> caConc_[ index ].ceiling_;
+		   Possibly the similar to Vmax #TODO
+	
+	double getCaFloor( Id id ) const;
+	void setCaFloor( Id id, double floor );
+		-> caConc_[ index ].floor_;
+		   Likely similar to Vmin #TODO
+	
+	static const Cinfo* initCinfo();
+		-> Declarations needed to make this into a MOOSE class.
+
+    static const std::set<string>& handledClasses();
+    	-> Returns the set of classes "handled" by HSolve. Why on earth would
+    	   you need this? [Look down]
+    
+    static void deleteIncomingMessages( Element * orig, const string finfo);
+    	-> Delete messages coming into this particular element if it is of a
+    	   class that is handled by HSolve. Aha! That explains the previous one
+	
+private:
+	static vector< Id > children( Id obj );
+		-> Call Neutral::children to get child elements. Like subfolders:
+		   I think we mean here that
+		       /model
+		          /model/compt1
+		          /model/compt2
+		   compt1 and compt2 are children of model.
+
+	static Id deepSearchForCompartment( Id base );
+		-> Used to search for a compartment starting from seed
+	
+	void setup( Eref hsolve );
+		-> Sets up everything under HSolve.
+	void zombify( Eref hsolve ) const;
+		-> Zombifies everything that HSolve can take over.
+	
+	// Mapping global Id to local index. Defined in HSolveInterface.cpp.
+	void mapIds();
+		-> Fills up compartmentId_, caConcId_ and channelId_ using the next
+		   function.
+
+	void mapIds( vector< Id > id );
+		-> Fills up the relevant vector using localIndex_:
+		   localIndex_[ id[ i ] ] = i;
+
+	unsigned int localIndex( Id id ) const;
+		-> Does a find on localIndex_
+
+	map< Id, unsigned int > localIndex_;
+		-> Id to local indexing scheme.
+	
+	double dt_;
+		-> Simulation time step. Why is it here? Wasn't it there somewhere
+		   earlier too?
+
+	string path_;
+		-> Path to the compartment. Same thing with this. Wasn't it defined
+		   further up the inheritance tree?
+
+	Id seed_;
+		-> Seed for finding all compartments of a given neuron.
+
+};
+
+--------------------------------------------------------------------------------
+
+First I want to see what this CurrentStruct is:
+
+Good lord! There's a whole HSolveStruct.h file and I just didn't see it!
+
+typedef double ( *PFDD )( double, double );
+	-> Just a typedef for a certain kind of function pointer.
+
+struct CompartmentStruct
+	-> Struct to hold a compartment? => Check. #TODO
+{
+	double CmByDt;
+	double EmByRm;
+};
+	-> Need to figure out what the data members are for by reading setup
+
+struct InjectStruct
+	-> InjectStruct stores two different kinds of injected currents - one is a
+	   "basal" injection, which the user sets at the start of the simulation,
+	   and remains constant as long as the simulation is running. The user
+	   could potentially run the simulation for N time steps, stop, change
+	   the value, and then resume, however.
+	   The second kind is a "varying" injection, meaning that it comes
+	   from some other part of moose via a message. So this thing has an
+	   associated destFinfo. injectVarying is set to zero at every time
+	   step.
+{
+	InjectStruct()
+		:
+		injectVarying( 0.0 ),
+		injectBasal( 0.0 )
+	{ ; }
+	
+	double injectVarying;
+	double injectBasal;
+};
+
+struct CurrentStruct
+	-> Channel-specific current struct. Used as the structure for the vector
+	   current_.
+{
+	double Gk;
+	double Ek;
+};
+
+struct ChannelStruct
+	-> Structure for a channel.
+{
+public:
+	double Gbar_;
+		-> Channel conductivity when all gates are open.
+	PFDD takeXpower_;
+	PFDD takeYpower_;
+	PFDD takeZpower_;
+		-> Some clever method of actually applying the power on the fraction
+		   of gates, if I'm not wrong.
+	double Xpower_;
+	double Ypower_;
+	double Zpower_;
+		-> The actual powers for each gate
+	int instant_;
+		-> Instantaneously change conductance - conductance follows no kinetics
+		   It's like tau = 0 => conductance change directly mirrors voltage step
+	
+	void setPowers( double Xpower, double Ypower, double Zpower );
+		-> Sets the powers and accordingly sets the takePower_ functions.
+
+	void process( double*& state, CurrentStruct& current );
+		-> Finds the fraction for each gate by raising the "state" to the
+		   appropriate power. current.Gk is then set to Gbar_ times the
+		   calculated fraction. Note, "current" is a parameter.
+	
+private:
+	static PFDD selectPower( double power );
+	
+	static double power1( double x, double p ) {
+		return x;
+	}
+	static double power2( double x, double p ) {
+		return x * x;
+	}
+	static double power3( double x, double p ) {
+		return x * x * x;
+	}
+	static double power4( double x, double p ) {
+		return power2( x * x, p );
+	}
+	static double powerN( double x, double p );
+		-> The "clever" stuff.
+};
+
+struct SpikeGenStruct
+	-> Contains information about the spikegens that the HSolve object needs to
+	   talk with
+{
+	SpikeGenStruct( double* Vm, Eref e )
+		:
+		Vm_( Vm ),
+		e_( e )
+	{ ; }
+	
+	double* Vm_;
+		-> Vm to be sent out by the SpikeGen ? #TODO
+	Eref e_;
+		-> Eref of the SpikeGen object
+	
+	void reinit( ProcPtr info );
+		-> Finds the spikegen object using e_ and calls reinit on the spikegen
+	void send( ProcPtr info );
+		-> Calls handleVm and process on the spike.
+};
+
+struct SynChanStruct
+{
+	// Index of parent compartment
+	unsigned int compt_;
+		-> Which compt
+	Id elm_;
+		-> What is the id of the synchan => Check #TODO
+};
+
+struct CaConcStruct
+{
+	double c_;
+		-> Dynamic calcium concentration, over CaBasal_
+	double CaBasal_;
+		-> Some kind of reference calcium concentration
+	double factor1_;
+	double factor2_;
+		-> Both these factors are functions of tau, B and dt.
+	double ceiling_;
+	double floor_;
+		-> Ceiling and floor for lookup tables => Check #TODO
+	
+	CaConcStruct();
+	CaConcStruct(
+		double Ca,
+		double CaBasal,
+		double tau,
+		double B,
+		double ceiling,
+		double floor,
+		double dt );
+		-> Straightforward constructors
+
+	void setCa( double Ca );
+		-> c_ = Ca - CaBasal_;
+
+	void setCaBasal( double CaBasal );
+		-> c_ += CaBasal_ - CaBasal;
+		   CaBasal_ = CaBasal;
+		   That is, change CaBasal_ and update c_ accordingly.
+
+	void setTauB( double tau, double B, double dt );
+		-> Sets the factors using some vague functions.
+
+	double process( double activation );
+		-> c_ = factor1_ * c_ + factor2_ * activation;
+		   Also takes care of ceiling and floor values of ca = c_ + CaBasal_
+};
+
+--------------------------------------------------------------------------------
+
+Now for the HSolveActive class:
+
+class HSolveActive: public HSolvePassive
+{
+	typedef vector< CurrentStruct >::iterator currentVecIter;
+		-> For iterating through current_.
+
+public:
+	HSolveActive();
+	
+	void setup( Id seed, double dt );
+	void step( ProcPtr info );
+		-> Equivalent to process.
+	void reinit( ProcPtr info );
+	
+protected:
+	/**
+	 * Solver parameters: exposed as fields in MOOSE
+	 */
+	
+	/**
+	 * caAdvance_: This flag determines how current flowing into a calcium pool
+	 * is computed. A value of 0 means that the membrane potential at the
+	 * beginning of the time-step is used for the calculation. This is how
+	 * GENESIS does its computations. A value of 1 means the membrane potential
+	 * at the middle of the time-step is used. This is the correct way of
+	 * integration, and is the default way.
+	 */
+	int                       caAdvance_;
+		-> Mostly can be ignored. The only correct method is to take the
+		   mid value.
+	
+	/**
+	 * vMin_, vMax_, vDiv_,
+	 * caMin_, caMax_, caDiv_:
+	 * 
+	 * These are the parameters for the lookup tables for rate constants.
+	 * 'min' and 'max' are the boundaries within which the function is defined.
+	 * 'div' is the number of divisions between min and max.
+	 */
+	double                    vMin_;
+	double                    vMax_;
+	int                       vDiv_;
+	double                    caMin_;
+	double                    caMax_;
+	int                       caDiv_;
+		-> The above are all documented under their respective set/get functions
+		   in the HSolve class above.
+	
+	/**
+	 * Internal data structures. Will also be accessed in derived class HSolve.
+	 */
+	vector< CurrentStruct >   current_;
+		-> Channel current.
+	
+	vector< double >          state_;
+		-> Fraction of gates open.
+	vector< ChannelStruct >   channel_;
+		-> Vector of channels. Links to compartment via chan2compt
+	vector< SpikeGenStruct >  spikegen_;
+		-> Vector of spikegens.
+	vector< SynChanStruct >   synchan_;
+		-> vector of synchans
+	vector< CaConcStruct >    caConc_;
+		-> Vector of caConcs (calcium pool data)
+	vector< double >          ca_;
+		-> Calcium concentrations.
+	vector< double >          caActivation_;
+		-> caActivation is the amount of calcium current from all sources
+		   Sources are: 1. Ca channels
+		                2. Syn chans (but this has not been implemented)
+	vector< double* >         caTarget_;
+		-> caTarget is the calcium pool that a given Ca channel accesses.
+	LookupTable               vTable_;
+		-> Lookup tables for voltage.
+	LookupTable               caTable_;
+		-> Lookup table for calcium.
+	vector< bool >            gCaDepend_;
+		-> Does the conductance depend on Ca conc?
+	vector< unsigned int >    caCount_;
+		-> Number of calcium pools in a given compartment
+	vector< int >             caDependIndex_;
+		-> Which pool does a given calcium dependent channel depend upon?
+	vector< LookupColumn >    column_;
+		-> Which column in the lookup table to lookup for this species?
+	vector< LookupRow >       caRowCompt_;
+		-> #TODO
+	vector< LookupRow* >      caRow_;
+		-> #TODO
+	vector< int >             channelCount_;
+		-> Number of channels in each compt?
+	vector< currentVecIter >  currentBoundary_;
+		-> Used to designate channel / compartment boundaries of flattened
+		   arrays. In the case of current, it is a channel-wise boundary
+	vector< unsigned int >    chan2compt_;
+		-> chan2compt_ has the index of the compartment to which a certain
+		   channel belongs. Channel index is the index into this vector.
+	vector< unsigned int >    chan2state_;
+		-> Converts channel id into a state id (sort of)
+	vector< double >          externalCurrent_;
+		-> External currents - from channels that HSolve cannot internalize.
+	vector< Id >              caConcId_;
+		-> Vector of caConcIds - used for doing localIndex stuff
+	vector< Id >              channelId_;
+		-> Vector of channel Ids. Used for localIndexing
+	vector< Id >              gateId_;
+		-> Vector of gate Ids. Used for localIndexing
+	vector< unsigned int >    outVm_;
+		-> Tells you which compartments have external voltage-dependent
+		   channels (if any), so that you can send out Vm values only in those
+		   places
+	vector< unsigned int >    outCa_;
+		-> Tells you which compartments have external calcium-dependent
+		   channels so that you can send out Calcium concentrations in only
+		   those compartments.
+
+private:
+	/**
+	 * Setting up of data structures: Defined in HSolveActiveSetup.cpp
+	 */
+	void readHHChannels();
+	void readGates();
+	void readCalcium();
+	void readSynapses();
+	void readExternalChannels();
+		-> Reads the respective class and stores information during setup
+	void createLookupTables();
+		-> Creates the lookupTables. Need to understand how. #TODO
+	void manageOutgoingMessages();
+		-> Takes all outgoing messages and internalizes them. #TODO
+	
+	void cleanup();
+		-> Clears gCaDepend and caDependIndex. Need to find out more. #TODO
+	
+	/**
+	 * Reinit code: Defined in HSolveActiveSetup.cpp
+	 */
+	void reinitSpikeGens( ProcPtr info );
+	void reinitCompartments();
+	void reinitCalcium();
+	void reinitChannels();
+	
+	/**
+	 * Integration: Defined in HSolveActive.cpp
+	 */
+	void calculateChannelCurrents();
+	void updateMatrix();
+	void forwardEliminate();
+	void backwardSubstitute();
+	void advanceCalcium();
+	void advanceChannels( double dt );
+	void advanceSynChans( ProcPtr info );
+	void sendSpikes( ProcPtr info );
+	void sendValues( ProcPtr info );
+	
+	static const int INSTANT_X;
+	static const int INSTANT_Y;
+	static const int INSTANT_Z;
+};
+
+--------------------------------------------------------------------------------
+
+Stuff from RateLookup. This is pretty important, so we can't skip this.
+
+struct LookupRow
+{
+	double* row;
+		-> Pointer to the first column on a row
+	double fraction;
+		-> Fraction of V or Ca over and above the division boundary for
+		   interpolation.
+};
+
+struct LookupColumn
+{
+	LookupColumn() { ; }
+	unsigned int column;
+	//~ bool interpolate;
+};
+
+class LookupTable
+{
+public:
+	LookupTable() { ; }
+	
+	LookupTable(
+		double min,
+			-> min of range
+		double max,
+			-> max of range
+		unsigned int nDivs,
+			-> number of divisions (~ no. of rows)
+		unsigned int nSpecies );
+			-> number of species (number of columns / 2)
+	
+	void addColumns(
+		int species,
+		const vector< double >& C1,
+		const vector< double >& C2 );
+		-> Adds the columns for a given species. Columns supplied are C1 and C2
+
+	void column(
+		unsigned int species,
+		LookupColumn& column );
+	
+	void row(
+		double x,
+		LookupRow& row );
+		-> Returns the row corresponding to x in the "row" parameter.
+		   i.e., returns the leftover fraction and the row's start address
+	
+	void lookup(
+		const LookupColumn& column,
+		const LookupRow& row,
+		double& C1,
+		double& C2 );
+		-> Actually performs the lookup and the linear interpolation
+	
+private:
+	vector< double >     table_;
+		-> Flattened table
+	double               min_;
+		-> min of the voltage / caConc range
+	double               max_;
+		-> max of the voltage / caConc range
+	unsigned int         nPts_;
+		-> Number of rows in the table. Equal to nDivs + 2, so that
+		   interpolation can be safely done at either end.
+	double               dx_;
+		-> This is the smallest difference: (max - min) / nDivs
+	unsigned int         nColumns_;
+		-> Number of columns = 2 * number of species
+};
+
+--------------------------------------------------------------------------------
+
+And now for HSolvePassive
+(At least this one is small...)
+
+class HSolvePassive: public HinesMatrix
+{
+#ifdef DO_UNIT_TESTS
+	friend void testHSolvePassive();
+#endif
+	
+public:
+	void setup( Id seed, double dt );
+		-> The all important setup call. Walks the tree, initializes and stores
+		   the tree. Also sets dt_ and calls HinesMatrix's setup function to
+		   propagate.
+
+	void solve();
+		-> Does updateMatrix, forwardEliminate and backwardSubstitute.
+	
+protected:
+	// Integration
+	void updateMatrix();
+	void forwardEliminate();
+	void backwardSubstitute();
+	
+	vector< CompartmentStruct >       compartment_;
+	vector< Id >                      compartmentId_;
+	vector< double >                  V_;
+		-> V_ is addressed using a compartment index. V_ stores the Vm value of
+		   each compartment.
+
+	vector< TreeNodeStruct >          tree_;
+		-> The tree is used to acquire various values during setup. It contains
+		   the user-defined original values of all compartment parameters.
+		   Therefore, it is also used during reinit.
+	map< unsigned int, InjectStruct > inject_;
+		-> inject_ map: contains the list of compartments that have current
+		   injections into them.
+	
+private:
+	// Setting up of data structures
+	void clear();
+	void walkTree( Id seed );
+	void initialize();
+	void storeTree();
+	
+	// Used for unit tests.
+	double getV( unsigned int row ) const;
+};
+
+--------------------------------------------------------------------------------
+
+struct JunctionStruct
+{
+	JunctionStruct( unsigned int i, unsigned int r ) :
+		index( i ),
+		rank( r )
+	{ ; }
+	
+	bool operator< ( const JunctionStruct& other ) const {
+		return ( index < other.index );
+	}
+	
+	unsigned int index;	#TODO
+	unsigned int rank;
+};
+
+struct TreeNodeStruct
+{
+	vector< unsigned int > children;
+		-> Child compartments
+	double Ra;
+		-> Axial resistance (probably to parent) #TODO
+	double Rm;
+		-> Membrane resistance
+	double Cm;
+		-> Membrance capacitance
+	double Em;
+		-> Membrane resting potential
+	double initVm;
+		-> Initial value of membrane potential (as assigned by the user).
+};
+
+class HinesMatrix
+{
+public:
+	HinesMatrix();
+	
+	void setup( const vector< TreeNodeStruct >& tree, double dt );
+		-> Sets nCompt_, dt_ and tree_. Also sets Ga_ = 2 / tree.Ra
+		   Calls makeJunctions, makeMatrix and make Operands.
+	
+	unsigned int getSize() const;
+		-> Returns nCompt_
+
+	double getA( unsigned int row, unsigned int col ) const; #TODO
+	double getB( unsigned int row ) const;
+		-> return HS_[ 4 * row + 3 ];	#TODO
+	double getVMid( unsigned int row ) const;
+		-> return VMid_[ row ];
+		   Compartment voltage at the middle of the time step
+
+protected:
+	typedef vector< double >::iterator vdIterator;
+
+	unsigned int              nCompt_;
+		-> Number of compartments
+	double                    dt_;
+		-> Simulation time step (which gets overridden by the one in HSolve, 
+		   but that's okay.
+	
+	vector< JunctionStruct >  junction_;
+		-> Vector of junctions. Need to find out what they do. #TODO
+	vector< double >          HS_;
+		-> Flattened array containing the tridiagonal of the approximately
+		   tridiagonal Hines matrix, stacked against the column vector "b" that
+		   appears on the RHS of the equation that we're trying to solve: Ax=b.
+	vector< double >          HJ_;
+		-> Flattened array containing the off-diagonal elements of the Hines
+		   matrix
+	vector< double >          HJCopy_;
+		-> Required to supply some original parameters when HJ_ is being
+		   modified.
+	vector< double >          VMid_;
+		-> Compartment voltage at the middle of a time step.
+	vector< vdIterator >      operand_;
+		-> Don't know what this is, except that its a vector of vectors of
+		   doubles. #TODO
+	vector< vdIterator >      backOperand_;
+		-> Again, I don't know what this is, but it is also a vector of
+		   vectors of doubles.
+	int                       stage_;
+		-> Which stage the simulation has reached.
+		   0 => udpate matrix
+		   1 => forward eliminate
+		   2 => backward substitute
+	
+private:
+	void clear();
+	void makeJunctions();
+		-> This function creates junction structs to be stored in junction_.
+		   It does so by first looking through all compartments and finding
+		   those which have more than zero or one child. The zero-one child
+		   compts are left alone. coupled_ is populated with the rest of the
+		   compartments. Each element of coupled_ is sorted (they are all
+		   unsigned ints) and coupled_ itself is sorted by the first element
+		   in each element (groupCompare does this comparison in
+		   HinesMatrix.cpp).
+		   Note: the children themselves are unsigned ints that store the
+		   Hines index of the corresponding child compartment.
+		   So essentially, at each branch, a JunctionStruct is created for each
+		   child, which contains the hines index of that child and its rank,
+		   which is group-size() - childIndex - 1. Weird. #TODO
+	void makeMatrix();
+		-> Populates HS_ and HJ_. All of the electrical circuit analysis goes
+		   into this one single function (and updateMatrix, of course).
+	void makeOperands();
+		-> Makes operands in order to make forward elimination easier.
+	
+	const vector< TreeNodeStruct >          *tree_;
+		-> Pointer to a vector of TreeNodeStructs. Stores compartment info
+		   for setup.
+	vector< double >                         Ga_;
+		-> 2 / Ra => Becuase of the two sides of the compt? All the stuff is
+		   actually in the middle of the compt. Ra is the total axial
+		   resistance of the compartment. This Ga_ stores only half of that,
+		   for one side.
+	vector< vector< unsigned int > >         coupled_;
+		-> Contains a list of all children of a given compt. Also contains
+		   the parent itself. i.e., for each compartment that has more than
+		   one child, coupled_ stores a vector containing the children of the
+		   compartment and the compartment itself.
+		   coupled_ is therefore a vector of such vectors.
+	map< unsigned int, vdIterator >          operandBase_;
+		-> #TODO
+	map< unsigned int, unsigned int >        groupNumber_;
+		-> #TODO
+};
+
