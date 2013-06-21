@@ -8,7 +8,11 @@
 #** See the file COPYING.LIB for the full notice.
 #**********************************************************************/
 
-TARGET = _hsolve.o
+TARGET = _hsolveCuda.o
+
+SUBDIR = \
+	cudaLibrary \
+	test	\
 
 OBJ = \
 	HSolveStruct.o \
@@ -44,10 +48,13 @@ ZombieCaConc.o:	ZombieCaConc.h ../biophysics/CaConc.h HSolve.h HSolveActive.h Ra
 ZombieHHChannel.o:	ZombieHHChannel.h ../biophysics/HHChannel.h ../biophysics/ChanBase.h ../biophysics/HHGate.h HSolve.h HSolveActive.h RateLookup.h HSolvePassive.h HinesMatrix.h HSolveStruct.h ../basecode/ElementValueFinfo.h
 
 .cpp.o:
-	$(CXX) $(CXXFLAGS) $(SMOLDYN_FLAGS) -I. -I../basecode -I../msg $< -c
+	$(CXX) $(CXXFLAGS) $(SMOLDYN_FLAGS) -I/usr/local/cuda/include -I. -I../basecode -I../msg $< -c 
 
-$(TARGET): $(OBJ) $(SMOLDYN_OBJ) $(HEADERS)
+$(TARGET): subdirs $(OBJ) $(SMOLDYN_OBJ) $(HEADERS)
 	$(LD) -r -o $(TARGET) $(OBJ) $(SMOLDYN_OBJ) $(SMOLDYN_LIB_PATH) $(SMOLDYN_LIBS) $(GSL_LIBS)
+
+subdirs:
+	@(for i in $(SUBDIR) $(PARALLEL_DIR); do $(MAKE) -C $$i; done)
 
 clean:
 	rm -f *.o $(TARGET) core core.*

@@ -68,6 +68,9 @@ ifndef BUILD
 BUILD=release
 endif
 
+# Extra flags required for GPU compilation
+CUDA_EXTRA_FLAGS = -L/usr/local/cuda/lib64 -lcuda -lcudart -lm -L../mooseCudaLibrary/Debug -lmooseCudaLibrary
+
 #If using mac uncomment the following lines
 # PLATFORM=mac
 #export PLATFORM
@@ -292,6 +295,7 @@ SUBDIR = \
 	$(SMOLDYN_DIR) \
 	$(SBML_DIR) \
 	trials \
+	hsolveCuda \
 
 
 # Used for 'make clean'
@@ -319,6 +323,7 @@ OBJLIBS =	\
 	$(SMOLDYN_LIB) \
 	$(SBML_LIB) \
 	trials/_trials.o \
+	hsolveCuda/_hsovleCuda.o \
 
 export CXX
 export CXXFLAGS
@@ -330,7 +335,7 @@ export USE_SBML
 all: moose pymoose
 
 moose: libs $(OBJLIBS) $(PARALLEL_LIB)
-	$(CXX) $(CXXFLAGS) $(OBJLIBS) $(PARALLEL_LIB) $(LIBS) -o moose
+	$(CXX) $(CXXFLAGS) $(OBJLIBS) $(PARALLEL_LIB) $(LIBS) $(CUDA_EXTRA_FLAGS) -o moose
 	@echo "Moose compilation finished"
 
 libmoose.so: libs
