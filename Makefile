@@ -69,7 +69,7 @@ BUILD=release
 endif
 
 # Extra flags required for GPU compilation
-CUDA_EXTRA_FLAGS = -L/usr/local/cuda/lib64 -lcuda -lcudart -lm -L../mooseCudaLibrary/Debug -lmooseCudaLibrary
+#CUDA_EXTRA_FLAGS = -L/usr/local/cuda/lib64 -lcuda -lcudart -lm -L../mooseCudaLibrary/Debug -lmooseCudaLibrary
 
 #If using mac uncomment the following lines
 # PLATFORM=mac
@@ -295,7 +295,7 @@ SUBDIR = \
 	$(SMOLDYN_DIR) \
 	$(SBML_DIR) \
 	trials \
-	hsolveCuda \
+#	hsolveCuda \
 
 
 # Used for 'make clean'
@@ -323,7 +323,7 @@ OBJLIBS =	\
 	$(SMOLDYN_LIB) \
 	$(SBML_LIB) \
 	trials/_trials.o \
-	hsolveCuda/_hsovleCuda.o \
+#	hsolveCuda/_hsovleCuda.o \
 
 export CXX
 export CXXFLAGS

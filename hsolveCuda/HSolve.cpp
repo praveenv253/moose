@@ -23,6 +23,7 @@
 #include "../biophysics/ChanBase.h"
 #include "../biophysics/HHChannel.h"
 #include "ZombieHHChannel.h"
+#include "cudaLibrary/GpuInterface.h"
 
 const Cinfo* HSolve::initCinfo()
 {
@@ -200,6 +201,7 @@ void HSolve::reinit( const Eref& hsolve, ProcPtr p )
 {
 	dt_ = p->dt;
 	this->HSolveActive::reinit( p );
+	gpu_ = GpuInterface(this);
 }
 
 void HSolve::zombify( Eref hsolve ) const

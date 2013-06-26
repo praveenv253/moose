@@ -10,11 +10,15 @@
 #ifndef _HSOLVE_H
 #define _HSOLVE_H
 #include <set>
+#include "cudaLibrary/GpuInterface.h"
+
 /**
  * HSolve adapts the integrator HSolveActive into a MOOSE class.
  */
 class HSolve: public HSolveActive
 {
+	friend class GpuInterface;
+
 public:
 	HSolve();
 	
@@ -155,6 +159,8 @@ private:
 	void mapIds( vector< Id > id );
 	unsigned int localIndex( Id id ) const;
 	map< Id, unsigned int > localIndex_;
+
+	GpuInterface gpu_;
 	
 	double dt_;
 	string path_;
