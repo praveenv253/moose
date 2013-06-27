@@ -8,7 +8,6 @@
 **********************************************************************/
 
 #include <vector>
-#include <cstdio>
 #include "GpuInterface.h"
 #include "GpuKernels.h"
 
@@ -18,8 +17,9 @@
 #define _(value) {															\
 	cudaError_t _m_cudaStat = value;										\
 	if (_m_cudaStat != cudaSuccess) {										\
-		fprintf(stderr, "Error %s at line %d in file %s\n",					\
-				cudaGetErrorString(_m_cudaStat), __LINE__, __FILE__);		\
+		std::cerr << "Error " << cudaGetErrorString(_m_cudaStat)			\
+				  << " at line " << __LINE__ << " in file " << __FILE__		\
+				  << std::endl;												\
 		exit(1);															\
 	} }
 

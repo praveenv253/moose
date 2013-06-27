@@ -13,11 +13,10 @@
 #include "../../basecode/header.h"			// For miscellaneous defns
 #include "../HSolveStruct.h"				// For structure definitions
 #include "../RateLookup.h"
-#include "../HinesMatrix.h"
+#include "../HinesMatrix.h"					// For JunctionStruct
 #include "../HSolvePassive.h"
 #include "../HSolveActive.h"
 #include "../HSolve.h"						// For HSolve
-#include "../HinesMatrix.h"					// For JunctionStruct
 
 /** Structure to store data that to be transferred to the GPU */
 struct GpuDataStruct {

@@ -16,7 +16,16 @@ all: libmooseCudaLibrary.so
 libmooseCudaLibrary.so: $(OBJS) $(HEADERS)
 	nvcc -shared -link -o "libmooseCudaLibrary.so" $(OBJS)
 
-GpuInterface.o: GpuInterface.cu GpuInterface.h GpuKernels.h
+HSOLVE_HEADERS = \
+	../../basecode/header.h \
+	../HSolveStruct.h \
+	../RateLookup.h \
+	../HinesMatrix.h \
+	../HSolvePassive.h \
+	../HSolveActive.h \
+	../HSolve.h \
+
+GpuInterface.o: GpuInterface.cu GpuInterface.h GpuKernels.h $(HSOLVE_HEADERS)
 	nvcc $(NVCC_FLAGS) -o GpuInterface.o GpuInterface.cu
 
 GpuKernels.o: GpuKernels.cu GpuKernels.h ../HSolveStruct.h ../HinesMatrix.h
