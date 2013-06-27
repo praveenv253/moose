@@ -14,22 +14,17 @@
 #include "../HSolveStruct.h"				// For structure definitions
 #include "../HinesMatrix.h"					// For JunctionStruct
 
-struct OperandStruct {
-	double *op;
-	unsigned int nOps;
-};
-
-/* Structure to store data that to be transferred to the GPU */
+/** Structure to store data that to be transferred to the GPU */
 struct GpuDataStruct {
-	double *HS;							// Tridiagonal part of Hines matrix
-	double *HJ;							// Off-diagonal elements
-	double *V;							// Vm values of compartments
-	double *VMid;						// Vm values at mid-time-step
-	double *HJCopy;						//
-	CompartmentStruct *compartment;		// Array of compartments
-	OperandStruct *operand;				// Array of operands
-	OperandStruct *backOperand			//
-	JunctionStruct *junction;			// Array of junctions
+	double *HS;							///< Tridiagonal part of Hines matrix
+	double *HJ;							///< Off-diagonal elements
+	double *V;							///< Vm values of compartments
+	double *VMid;						///< Vm values at mid-time-step
+	double *HJCopy;						///<
+	double **operand;					///< Array of pointers to operands
+	double **backOperand				///<
+	CompartmentStruct *compartment;		///< Array of compartments
+	JunctionStruct *junction;			///< Array of junctions
 
 	// Thse do not need to be passed by reference because they are not going
 	// to be changed by any kernel.
@@ -40,20 +35,22 @@ struct GpuDataStruct {
 	unsigned int junctionSize;
 };
 
-/* 
+/** 
  * GpuInterface class that allows each Hines Solver to create its own interface
- * with the GPU, so that each Hines solver object only uses as many blocks and
- * threads as it needs.
+ * with the GPU.
  */
 class GpuInterface {
 	protected:
 		unsigned int numBlocks_;
 		unsigned int numThreads_;
 		int stage_;
+		vector< double * > operand_;
+		vector< double * > backOperand_;
 		GpuDataStruct data_;
 
 	public:
 		GpuInterface(HSolve *);
+		void makeOperands();
 		void gpuUpdateMatrix();
 		void gpuForwardEliminate();
 		void gpuBackwardSubstitute();

@@ -7,6 +7,7 @@
 ** See the file COPYING.LIB for the full notice.
 **********************************************************************/
 
+#include <vector>
 #include "GpuInterface.h"
 #include "GpuKernels.h"
 
@@ -21,18 +22,16 @@
 		exit(1);															\
 	} }
 
-/* 
+/** 
  * Constructor for the GpuInterface class.
- * Allocates memory for all data elements in the GPU
- * Transfers data from CPU to GPU.
+ * Allocates memory for all data elements in the GPU. Transfers data from CPU
+ * to GPU.
  */
 GpuInterface::GpuInterface(HSolve *hsolve)
 {
 	// Find the required sizes of elements
 	data_.nCompts = hsolve->V_.size();
 	data_.HJSize = hsolve->HJ_.size();
-	data_.operandSize = hsolve->operand_.size();
-	data_.backOperandSize = hsolve->backOperand_.size();
 	data_.junctionSize = hsolve->junction_.size();
 	
 	// Allocate memory for array-of-double data members
@@ -54,14 +53,13 @@ GpuInterface::GpuInterface(HSolve *hsolve)
 	_( cudaMemcpy( data_.HJCopy, &hsolve->HJCopy_[0],
 				   data_.HJSize * sizeof(double), cudaMemcpyHostToDevice ) );
 
-	// Allocate memory for array-of-struct data members that do not contain
-	// pointers
+	// Allocate memory for array-of-structure data members
 	_( cudaMalloc( (void **) &data_.compartment,
 				   data_.nCompts * sizeof(Compartment) ) );
 	_( cudaMalloc( (void **) &data_.junction,
 				   data_.junctionSize * sizeof(Junction) ) );
 	
-	// Copy data for array-of-struct data members that do not contain pointers
+	// Copy data for array-of-struct data members
 	_( cudaMalloc( data_.compartment, &hsolve->compartment_[0],
 				   data_.nCompts * sizeof(Compartment),
 				   cudaMemcpyHostToDevice ) );
@@ -69,47 +67,22 @@ GpuInterface::GpuInterface(HSolve *hsolve)
 				   data_.junctionSize * sizeof(Junction),
 				   cudaMemcpyHostToDevice ) );
 	
-	// Allocate data for array-of-struct data members that contain pointers
+	// Call to take care of populating GpuInterface::operand_
+	makeOperands(hsolve);
 
-	// First, we need to create the structs out of the vector of vectors.
-	OperandStruct *os = new OperandStruct[data_.operandSize];
-	for( int i = 0 ; i < data_.operandSize ; i++ )
-	{
-		// Find the number of operands in the ith vector of hsolve->operand_
-		os[i].nOps = hsolve->operand_[i].size();
-		// Allocate memory for the ith vector in hsolve->operand_
-		_( cudaMalloc( (void **) &os[i].ops, os[i].nOps * sizeof(double) ) );
-		// Copy data for the ith vector in hsolve->operand
-		_( cudaMemcpy( &os[i].ops, &hsolve->operand_[i][0],
-					   os[i].nOps * sizeof(double), cudaMemcpyHostToDevice ) );
-	}
-	// Finally, copy the entire set of pointers to these operand arrays into
-	// the GPU
-	_( cudaMalloc( (void **) &data_.operand,
-				   data_.operandSize * sizeof(OperandStruct) ) );
-	_( cudaMemcpy( data_.operand, os,
-				   data_.operandSize * sizeof(OperandStruct),
-				   cudaMemcpyHostToDevice ) );
+	// Allocate and copy memory for operands and backOperands
+	data_.operandSize = operand_.size();
+	data_.backOperandSize = backOperand_.size();
 
-	// Now, to do the same for hsolve->backOperand_
-	OperandStruct *bos = new OperandStruct[data_.backOperandSize];
-	for( int i = 0 ; i < data_.backOperandSize ; i++ )
-	{
-		// Find the number of operands in the ith vector of hsolve->operand_
-		bos[i].nOps = hsolve->backOperand_[i].size();
-		// Allocate memory for the ith vector in hsolve->operand_
-		_( cudaMalloc( (void **) &bos[i].ops, bos[i].nOps * sizeof(double) ) );
-		// Copy data for the ith vector in hsolve->operand
-		_( cudaMemcpy( &bos[i].ops, &hsolve->backOperand_[i][0],
-					   bos[i].nOps * sizeof(double), cudaMemcpyHostToDevice) );
-	}
-	// Finally, copy the entire set of pointers to these operand arrays into
-	// the GPU
-	_( cudaMalloc( (void **) &data_.backOperand,
-				   data_.backOperandSize * sizeof(OperandStruct) ) );
-	_( cudaMemcpy( data_.backOperand, bos,
-				   data_.backOperandSize * sizeof(OperandStruct),
-				   cudaMemcpyHostToDevice ) );
+	_( cudaMalloc((void**)&data_.operand, operand_.size() * sizeof(double*)) );
+	_( cudaMemcpy(data_.operand, &operand_[ 0 ],
+				  operand_.size() * sizeof(double*), cudaMemcpyHostToDevice) );
+
+	_( cudaMalloc((void**)&data_.backOperand,
+				  backOperand_.size() * sizeof(double*)) );
+	_( cudaMemcpy(data_.backOperand, &backOperand_[ 0 ],
+				  backOperand_.size() * sizeof(double*),
+				  cudaMemcpyHostToDevice) );
 
 	// Need to decide how many blocks and threads to use per HSolve object
 	// For now, keep each hsolver on its own thread.
@@ -117,12 +90,158 @@ GpuInterface::GpuInterface(HSolve *hsolve)
 	numThreads_ = 1;
 }
 
+/**
+ * Function to take care of making operands in the same way that
+ * HinesMatrix::makeOperands does.
+ */
+void GpuInterface::makeOperands(HSolve *hsolve)
+{
+	typedef vector< double >::iterator vdIterator;
+
+	unsigned int index;
+	unsigned int rank;
+	unsigned int farIndex;
+	double *base;
+	vector< JunctionStruct >::iterator junction;
+	
+	// Operands for forward-elimination
+	for ( junction = hsolve->junction_.begin();
+		  junction != hsolve->junction_.end();
+		  ++junction )
+	{
+		index = junction->index;
+		rank = junction->rank;
+
+		// operandBase_[ index ] maps to the vdIterator corresponding to the
+		// position of compartment with Hines index `index` in HJ_.
+		// base needs to contain the pointer to HJ (in the GPU) which marks
+		// the start of this juction in HJ.
+		base = &( *hsolve->operandBase_[ index ] ) - &hsolve->HJ_[ 0 ];
+		base = data_.HJ + base;
+
+		// This is the list of compartments connected at a junction.
+		const vector< unsigned int >& group = hsolve->coupled_[
+												  hsolve->groupNumber_[ index ]
+											  ];
+		
+		if ( rank == 1 ) {
+			operand_.push_back( base );
+			
+			// Select last member.
+			farIndex = group[ group.size() - 1 ];
+			operand_.push_back( &data_.HS[ 0 ] + 4 * farIndex );
+			operand_.push_back( &data_.VMid[ 0 ] + farIndex );
+		} else if ( rank == 2 ) {
+			operand_.push_back( base );
+			
+			// Select 2nd last member.
+			farIndex = group[ group.size() - 2 ];
+			operand_.push_back( &data_.HS[ 0 ] + 4 * farIndex );
+			operand_.push_back( &data_.VMid[ 0 ] + farIndex );
+			
+			// Select last member.
+			farIndex = group[ group.size() - 1 ];
+			operand_.push_back( &data_.HS[ 0 ] + 4 * farIndex );
+			operand_.push_back( &data_.VMid[ 0 ] + farIndex );
+		} else {
+			// Operations on diagonal elements and elements from B
+			// (as in Ax = B).
+			int start = group.size() - rank;
+			for ( unsigned int j = 0; j < rank; ++j ) {
+				farIndex = group[ start + j ];
+				
+				// Diagonal elements
+				operand_.push_back( &data_.HS [ 0 ] + 4 * farIndex );
+				operand_.push_back( base + 2 * j );
+				operand_.push_back( base + 2 * j + 1 );
+				
+				// Elements from B
+				operand_.push_back( &data_.HS[ 0 ] + 4 * farIndex + 3 );
+				operand_.push_back( &data_.HS[ 0 ] + 4 * index + 3 );
+				operand_.push_back( base + 2 * j + 1 );
+			}
+			
+			// Operations on off-diagonal elements.
+			double *left;
+			double *above;
+			double *target;
+			
+			// Upper triangle elements
+			left = base + 1;
+			target = base + 2 * rank;
+			for ( unsigned int i = 1; i < rank; ++i ) {
+				above = base + 2 * i;
+				for ( unsigned int j = 0; j < rank - i; ++j ) {
+					operand_.push_back( target );
+					operand_.push_back( above );
+					operand_.push_back( left );
+					
+					above += 2;
+					target += 2;
+				}
+				left += 2;
+			}
+			
+			// Lower triangle elements
+			target = base + 2 * rank + 1;
+			above = base;
+			for ( unsigned int i = 1; i < rank; ++i ) {
+				left = base + 2 * i + 1;
+				for ( unsigned int j = 0; j < rank - i; ++j ) {
+					operand_.push_back( target );
+					operand_.push_back( above );
+					operand_.push_back( left );
+					
+					/*
+					 * This check required because the MS VC++ compiler is
+					 * paranoid about iterators going out of bounds, even if
+					 * they are never used after that.
+					 */
+					if ( i == rank - 1 && j == rank - i - 1 )
+						continue;
+					
+					target += 2;
+					left += 2;
+				}
+				above += 2;
+			}
+		}
+	}
+	
+	// Operands for backward substitution
+	for ( junction = hsolve->junction_.begin();
+		  junction != hsolve->junction_.end();
+		  ++junction )
+	{
+		if ( junction->rank < 3 )
+			continue;
+		
+		index = junction->index;
+		rank = junction->rank;
+		base = ( &(*hsolve->operandBase_[ index ]) - &hsolve->HJ_[ 0 ] );
+		base = data_.HJ + base;
+		
+		// This is the list of compartments connected at a junction.
+		const vector< unsigned int >& group = hsolve->coupled_[
+												  hsolve->groupNumber_[ index ]
+											  ];
+		
+		unsigned int start = group.size() - rank;
+		for ( unsigned int j = 0; j < rank; ++j ) {
+			farIndex = group[ start + j ];
+			
+			backOperand_.push_back( base + 2 * j );
+			backOperand_.push_back( &data_.VMid[ 0 ] + farIndex );
+		}
+	}
+}
+
 void GpuInterface::gpuUpdateMatrix()
 {
 	dim3 numBlocks(numBlocks_);
 	dim3 numThreads(numThreads_);
 
-	gpuUpdateMatrix<<< numBlocks, numThreads >>>( data_ );
+	updateMatrixKernel<<< numBlocks, numThreads >>>( data_ );
 
 	stage_ = 0;    // Update done.
 }
@@ -132,7 +251,7 @@ void GpuInterface::gpuForwardEliminate()
 	dim3 numBlocks(numBlocks_);
 	dim3 numThreads(numThreads_);
 
-	gpuForwardEliminate<<< numBlocks, numThreads >>>( data_ );
+	forwardEliminateKernel<<< numBlocks, numThreads >>>( data_ );
 
 	stage_ = 1;    // Forward elimination done.
 }
@@ -142,7 +261,9 @@ void GpuInterface::gpuBackwardSubstitute()
 	dim3 numBlocks(numBlocks_);
 	dim3 numThreads(numThreads_);
 
-	gpuBackwardSubstitute<<< numBlocks, numThreads >>>( data_ );
+	backwardSubstituteKernel<<< numBlocks, numThreads >>>( data_ );
 	
 	stage_ = 2;    // Backward substitution done.
 }
+
+

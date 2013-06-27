@@ -24,8 +24,9 @@ __global__ void updateMatrixKernel(GpuDataStruct ds) {
 	
 	CompartmentStruct *ic;
 	for ( 	ic = compartment;
-			ic < compartment + nCompts * sizeof(CompartmentStruct);
-			++ic ) {
+			ic < compartment + nCompts * sizeof( CompartmentStruct );
+			++ic )
+	{
 		*ihs         = *( 2 + ihs );
 		*( 3 + ihs ) = *iv * ic->CmByDt + ic->EmByRm;
 		
@@ -45,10 +46,10 @@ __global__ void updateMatrixKernel(GpuDataStruct ds) {
 	*/
 }
 
-void HSolvePassive::forwardEliminate(GpuDataStruct ds) {
+__global__ void forwardEliminateKernel(GpuDataStruct ds) {
 	unsigned int ic = 0;
 	double *ihs = ds.HS;
-	OperandStruct *iop = ds.operand;
+	double **iop = ds.operand;
 	JunctionStruct *junction;
 	
 	double pivot;
@@ -71,8 +72,8 @@ void HSolvePassive::forwardEliminate(GpuDataStruct ds) {
 		
 		pivot = *ihs;
 		if ( rank == 1 ) {
-			double *j = iop->ops;
-			double *s = iop->ops + 1;
+			double *j = *iop;
+			double *s = *iop + 1;
 			
 			division    = *( j + 1 ) / pivot;
 			*( s )     -= division * *j;
@@ -80,8 +81,8 @@ void HSolvePassive::forwardEliminate(GpuDataStruct ds) {
 			
 			iop += 3;
 		} else if ( rank == 2 ) {
-			vdIterator j = *iop;
-			vdIterator s;
+			double *j = *iop;
+			double *s;
 			
 			s           = *( iop + 1 );
 			division    = *( j + 1 ) / pivot;
@@ -97,8 +98,7 @@ void HSolvePassive::forwardEliminate(GpuDataStruct ds) {
 			
 			iop += 5;
 		} else {
-			vector< vdIterator >::iterator
-				end = iop + 3 * rank * ( rank + 1 );
+			double **end = iop + 3 * rank * ( rank + 1 );
 			for ( ; iop < end; iop += 3 )
 				**iop -= **( iop + 2 ) / pivot * **( iop + 1 );
 		}
@@ -106,7 +106,7 @@ void HSolvePassive::forwardEliminate(GpuDataStruct ds) {
 		++ic, ihs += 4;
 	}
 	
-	while ( ic < nCompt_ - 1 ) {
+	while ( ic < ds.nCompts - 1 ) {
 		*( ihs + 4 ) -= *( ihs + 1 ) / *ihs * *( ihs + 1 );
 		*( ihs + 7 ) -= *( ihs + 1 ) / *ihs * *( ihs + 3 );
 		
@@ -114,70 +114,74 @@ void HSolvePassive::forwardEliminate(GpuDataStruct ds) {
 	}
 }
 
-void HSolvePassive::backwardSubstitute() {
-	int ic = nCompt_ - 1;
-	vector< double >::reverse_iterator ivmid = VMid_.rbegin();
-	vector< double >::reverse_iterator iv = V_.rbegin();
-	vector< double >::reverse_iterator ihs = HS_.rbegin();
-	vector< vdIterator >::reverse_iterator iop = operand_.rbegin();
-	vector< vdIterator >::reverse_iterator ibop = backOperand_.rbegin();
-	vector< JunctionStruct >::reverse_iterator junction;
+__global__ void backwardSubstituteKernel(GpuDataStruct *ds) {
+	// We are reverse iterating here, so all pointers are initialized to the
+	// ultimate elements of their respective arrays.
+	int ic = ds.nCompts - 1;
+	double *ivmid = ds.VMid + ic;
+	double *iv = ds.V + ic;
+	double *ihs = ds.HS + 4 * ds.nCompts - 1;
+	double **iop = ds.operand + ds.operandSize - 1;
+	double **ibop = ds.backOperand + ds.backOperandSize - 1;
+	JunctionStruct *junction = ds.junction + ds.junctionSize - 1;
 	
-	*ivmid = *ihs / *( ihs + 3 );
+	*ivmid = *ihs / *( ihs - 3 );
 	*iv = 2 * *ivmid - *iv;
-	--ic, ++ivmid, ++iv, ihs += 4;
+	--ic, --ivmid, --iv, ihs -= 4;
 	
 	int index;
 	int rank;
-	for ( junction = junction_.rbegin();
-	      junction != junction_.rend();
-	      junction++ )
+	for ( ;
+	      junction >= ds.junction;
+	      junction-- )
 	{
 		index = junction->index;
 		rank = junction->rank;
 		
 		while ( ic > index ) {
-			*ivmid = ( *ihs - *( ihs + 2 ) * *( ivmid - 1 ) ) / *( ihs + 3 );
+			// ivmid was -1, so now it's +1!
+			*ivmid = ( *ihs - *( ihs - 2 ) * *( ivmid + 1 ) ) / *( ihs - 3 );
 			*iv = 2 * *ivmid - *iv;
 			
-			--ic, ++ivmid, ++iv, ihs += 4;
+			--ic, --ivmid, --iv, ihs -= 4;
 		}
 		
 		if ( rank == 1 ) {
-			*ivmid = ( *ihs - **iop * **( iop + 2 ) ) / *( ihs + 3 );
+			*ivmid = ( *ihs - **iop * **( iop - 2 ) ) / *( ihs - 3 );
 			
-			iop += 3;
+			iop -= 3;
 		} else if ( rank == 2 ) {
-			vdIterator v0 = *( iop );
-			vdIterator v1 = *( iop + 2 );
-			vdIterator j  = *( iop + 4 );
+			double *v0 = *( iop );
+			double *v1 = *( iop - 2 );
+			double *j  = *( iop - 4 );
 			
 			*ivmid = ( *ihs
-			           - *v0 * *( j + 2 )
-			           - *v1 * *j
-			         ) / *( ihs + 3 );
+			           - *v0 * *( j + 2 )	// j was a vdIterator in forward!
+			           - *v1 * *j			// so + remains +!!
+			         ) / *( ihs - 3 );
 			
-			iop += 5;
+			iop -= 5;
 		} else {
 			*ivmid = *ihs;
 			for ( int i = 0; i < rank; ++i ) {
-				*ivmid -= **ibop * **( ibop + 1 );
-				ibop += 2;
+				*ivmid -= **ibop * **( ibop - 1 );
+				ibop -= 2;
 			}
-			*ivmid /= *( ihs + 3 );
+			*ivmid /= *( ihs - 3 );
 			
-			iop += 3 * rank * ( rank + 1 );
+			iop -= 3 * rank * ( rank + 1 );
 		}
 		
 		*iv = 2 * *ivmid - *iv;
-		--ic, ++ivmid, ++iv, ihs += 4;
+		--ic, --ivmid, --iv, ihs -= 4;
 	}
 	
 	while ( ic >= 0 ) {
-		*ivmid = ( *ihs - *( ihs + 2 ) * *( ivmid - 1 ) ) / *( ihs + 3 );
+		// The ivmid was -1, so now it becomes +1!
+		*ivmid = ( *ihs - *( ihs - 2 ) * *( ivmid + 1 ) ) / *( ihs - 3 );
 		*iv = 2 * *ivmid - *iv;
 		
-		--ic, ++ivmid, ++iv, ihs += 4;
+		--ic, --ivmid, --iv, ihs -= 4;
 	}
 }
 

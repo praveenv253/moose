@@ -11,7 +11,7 @@ OBJS += CudaModule.o
 all: libmooseCudaLibrary.so
 
 
-libmooseCudaLibrary.so: $(OBJS) 
+libmooseCudaLibrary.so: $(OBJS) $(HEADERS)
 	nvcc -shared -link -o  "libmooseCudaLibrary.so" $(OBJS) 
 
 clean:
