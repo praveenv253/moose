@@ -201,7 +201,7 @@ void HSolve::reinit( const Eref& hsolve, ProcPtr p )
 {
 	dt_ = p->dt;
 	this->HSolveActive::reinit( p );
-	gpu_ = GpuInterface(this);
+	gpu_ = new GpuInterface(this);
 }
 
 void HSolve::zombify( Eref hsolve ) const

@@ -8,7 +8,7 @@
 **********************************************************************/
 
 #include "GpuKernels.h"
-#include "../HsolveStruct.h"	// For CompartmentStruct, etc.
+#include "../HSolveStruct.h"	// For CompartmentStruct, etc.
 #include "../HinesMatrix.h"		// For JunctionStruct
 
 __global__ void updateMatrixKernel(GpuDataStruct ds) {
@@ -23,8 +23,8 @@ __global__ void updateMatrixKernel(GpuDataStruct ds) {
 	double *iv  = ds.V;
 	
 	CompartmentStruct *ic;
-	for ( 	ic = compartment;
-			ic < compartment + nCompts * sizeof( CompartmentStruct );
+	for ( 	ic = ds.compartment;
+			ic < ds.compartment + ds.nCompts * sizeof( CompartmentStruct );
 			++ic )
 	{
 		*ihs         = *( 2 + ihs );
@@ -114,7 +114,7 @@ __global__ void forwardEliminateKernel(GpuDataStruct ds) {
 	}
 }
 
-__global__ void backwardSubstituteKernel(GpuDataStruct *ds) {
+__global__ void backwardSubstituteKernel(GpuDataStruct ds) {
 	// We are reverse iterating here, so all pointers are initialized to the
 	// ultimate elements of their respective arrays.
 	int ic = ds.nCompts - 1;

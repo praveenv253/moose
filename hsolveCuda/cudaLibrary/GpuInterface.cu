@@ -8,6 +8,7 @@
 **********************************************************************/
 
 #include <vector>
+#include <cstdio>
 #include "GpuInterface.h"
 #include "GpuKernels.h"
 
@@ -33,14 +34,14 @@ GpuInterface::GpuInterface(HSolve *hsolve)
 	data_.nCompts = hsolve->V_.size();
 	data_.HJSize = hsolve->HJ_.size();
 	data_.junctionSize = hsolve->junction_.size();
-	
+
 	// Allocate memory for array-of-double data members
 	_( cudaMalloc( (void **) &data_.HS, 4 * data_.nCompts * sizeof(double) ) );
 	_( cudaMalloc( (void **) &data_.HJ, data_.HJSize * sizeof(double) ) );
 	_( cudaMalloc( (void **) &data_.V, data_.nCompts * sizeof(double) ) );
 	_( cudaMalloc( (void **) &data_.VMid, data_.nCompts * sizeof(double) ) );
 	_( cudaMalloc( (void **) &data_.HJCopy, data_.HJSize * sizeof(double) ) );
-	
+
 	// Copy array-of-double data into GPU
 	_( cudaMemcpy( data_.HS, &hsolve->HS_[0], 4* data_.nCompts* sizeof(double),
 				   cudaMemcpyHostToDevice ) );
@@ -55,18 +56,18 @@ GpuInterface::GpuInterface(HSolve *hsolve)
 
 	// Allocate memory for array-of-structure data members
 	_( cudaMalloc( (void **) &data_.compartment,
-				   data_.nCompts * sizeof(Compartment) ) );
+				   data_.nCompts * sizeof(CompartmentStruct) ) );
 	_( cudaMalloc( (void **) &data_.junction,
-				   data_.junctionSize * sizeof(Junction) ) );
-	
+				   data_.junctionSize * sizeof(JunctionStruct) ) );
+
 	// Copy data for array-of-struct data members
-	_( cudaMalloc( data_.compartment, &hsolve->compartment_[0],
-				   data_.nCompts * sizeof(Compartment),
+	_( cudaMemcpy( data_.compartment, &hsolve->compartment_[0],
+				   data_.nCompts * sizeof(CompartmentStruct),
 				   cudaMemcpyHostToDevice ) );
-	_( cudaMalloc( data_.junction, &hsolve->junction_[0],
-				   data_.junctionSize * sizeof(Junction),
+	_( cudaMemcpy( data_.junction, &hsolve->junction_[0],
+				   data_.junctionSize * sizeof(JunctionStruct),
 				   cudaMemcpyHostToDevice ) );
-	
+
 	// Call to take care of populating GpuInterface::operand_
 	makeOperands(hsolve);
 
@@ -116,13 +117,12 @@ void GpuInterface::makeOperands(HSolve *hsolve)
 		// position of compartment with Hines index `index` in HJ_.
 		// base needs to contain the pointer to HJ (in the GPU) which marks
 		// the start of this juction in HJ.
-		base = &( *hsolve->operandBase_[ index ] ) - &hsolve->HJ_[ 0 ];
-		base = data_.HJ + base;
+		base = data_.HJ
+			   + (long)( &( *hsolve->operandBase_[index] ) - &hsolve->HJ_[0] );
 
 		// This is the list of compartments connected at a junction.
-		const vector< unsigned int >& group = hsolve->coupled_[
-												  hsolve->groupNumber_[ index ]
-											  ];
+		const vector< unsigned int >& group =
+			hsolve->coupled_[ hsolve->groupNumber_[ index ] ];
 		
 		if ( rank == 1 ) {
 			operand_.push_back( base );
@@ -218,13 +218,12 @@ void GpuInterface::makeOperands(HSolve *hsolve)
 		
 		index = junction->index;
 		rank = junction->rank;
-		base = ( &(*hsolve->operandBase_[ index ]) - &hsolve->HJ_[ 0 ] );
-		base = data_.HJ + base;
+		base = data_.HJ
+			   + (long)( &( *hsolve->operandBase_[index] ) - &hsolve->HJ_[0] );
 		
 		// This is the list of compartments connected at a junction.
-		const vector< unsigned int >& group = hsolve->coupled_[
-												  hsolve->groupNumber_[ index ]
-											  ];
+		const vector< unsigned int >& group =
+			hsolve->coupled_[ hsolve->groupNumber_[ index ] ];
 		
 		unsigned int start = group.size() - rank;
 		for ( unsigned int j = 0; j < rank; ++j ) {

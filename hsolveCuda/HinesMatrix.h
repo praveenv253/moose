@@ -74,7 +74,6 @@ protected:
 	vector< vdIterator >      backOperand_;
 	int                       stage_;
 	
-private:
 	void clear();
 	void makeJunctions();
 	void makeMatrix();

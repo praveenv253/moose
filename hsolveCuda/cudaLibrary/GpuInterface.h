@@ -10,8 +10,13 @@
 #ifndef _GPU_INTERFACE_H
 #define _GPU_INTERFACE_H
 
-#include "../HSolve.h"
+#include "../../basecode/header.h"			// For miscellaneous defns
 #include "../HSolveStruct.h"				// For structure definitions
+#include "../RateLookup.h"
+#include "../HinesMatrix.h"
+#include "../HSolvePassive.h"
+#include "../HSolveActive.h"
+#include "../HSolve.h"						// For HSolve
 #include "../HinesMatrix.h"					// For JunctionStruct
 
 /** Structure to store data that to be transferred to the GPU */
@@ -22,7 +27,7 @@ struct GpuDataStruct {
 	double *VMid;						///< Vm values at mid-time-step
 	double *HJCopy;						///<
 	double **operand;					///< Array of pointers to operands
-	double **backOperand				///<
+	double **backOperand;				///<
 	CompartmentStruct *compartment;		///< Array of compartments
 	JunctionStruct *junction;			///< Array of junctions
 
@@ -50,7 +55,7 @@ class GpuInterface {
 
 	public:
 		GpuInterface(HSolve *);
-		void makeOperands();
+		void makeOperands(HSolve *);
 		void gpuUpdateMatrix();
 		void gpuForwardEliminate();
 		void gpuBackwardSubstitute();
