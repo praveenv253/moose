@@ -51,13 +51,21 @@ class GpuInterface {
 		vector< double * > operand_;
 		vector< double * > backOperand_;
 		GpuDataStruct data_;
+		HSolve *hsolve_;
 
 	public:
-		GpuInterface(HSolve *);
-		void makeOperands(HSolve *);
+		GpuInterface( HSolve * );
+		void makeOperands( HSolve * );
 		void gpuUpdateMatrix();
 		void gpuForwardEliminate();
 		void gpuBackwardSubstitute();
+
+		// Functions for unit tests
+		double getA( unsigned int, unsigned int ) const;
+		double getB( unsigned int ) const;
+		double getB( unsigned int ) const;
+		double getV( unsigned int ) const;
+		double getVMid( unsigned int ) const;
 };
 
 #endif

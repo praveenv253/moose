@@ -21,7 +21,8 @@
 				  << " at line " << __LINE__ << " in file " << __FILE__		\
 				  << std::endl;												\
 		exit(1);															\
-	} }
+	} 																		\
+}
 
 /** 
  * Constructor for the GpuInterface class.
@@ -30,6 +31,9 @@
  */
 GpuInterface::GpuInterface(HSolve *hsolve)
 {
+	// Save the pointer!
+	hsolve_ = hsolve;
+
 	// Find the required sizes of elements
 	data_.nCompts = hsolve->V_.size();
 	data_.HJSize = hsolve->HJ_.size();
@@ -265,4 +269,95 @@ void GpuInterface::gpuBackwardSubstitute()
 	stage_ = 2;    // Backward substitution done.
 }
 
+// getA and getB functions used in unit tests for comparing matrix element
+// values.
+
+/**
+ * Used by getA and getB to retrieve single data elements from the GPU.
+ * Horribly inefficient.
+ */
+template< class T >
+T get(T *address) {
+	T value;
+	// Copy data from GPU to CPU
+	_( cudaMemcpy( &value, address, sizeof( T ), cudaMemcpyDeviceToHost ) );
+	return value;
+}
+#define getd( addr ) get< double >( addr )
+
+/**
+ * Get the (row, col)-element of the Hines matrix.
+ */
+double GpuInterface::getA( unsigned int row, unsigned int col ) const
+{
+	/*
+	 * If forward elimination is done, or backward substitution is done, and
+	 * if (row, col) is in the lower triangle, then return 0.
+	 */
+	if ( ( stage_ == 1 || stage_ == 2 ) && row > col )
+		return 0.0;
+
+	if ( row >= data_.nCompts || col >= data_.nCompts )
+		return 0.0;
+
+	if ( row == col ) {
+		return getd( data_.HS + 4 * row );
+	}
+
+	unsigned int smaller = row < col ? row : col;
+	unsigned int bigger = row > col ? row : col;
+
+	// If find returns end, it means that `smaller` was not found.
+	if ( groupNumber_.find( smaller ) == groupNumber_.end() ) {
+		if ( bigger - smaller == 1 )
+			return getd( data_.HS + 4 * smaller + 1 );
+		else
+			return 0.0;
+	} else {
+		// We could use: groupNumber = groupNumber_[ smaller ], but this is a
+		// const function
+		unsigned int groupNumber = hsolve->groupNumber_.find(smaller)->second;
+		const vector< unsigned int >& group = hsolve->coupled_[ groupNumber ];
+		unsigned int location, size;
+		unsigned int smallRank, bigRank;
+
+		if ( find( group.begin(), group.end(), bigger ) != group.end() ) {
+			location = 0;
+			for ( int i = 0; i < static_cast< int >( groupNumber ); ++i ) {
+				size = hsolve->coupled_[ i ].size();
+				location += size * ( size - 1 );
+			}
+
+			size = group.size();
+			smallRank = group.end()
+						- find( group.begin(), group.end(), smaller ) - 1;
+			bigRank = group.end()
+					  - find( group.begin(), group.end(), bigger ) - 1;
+			location += size * ( size - 1 ) - smallRank * ( smallRank + 1 );
+			location += 2 * ( smallRank - bigRank - 1 );
+
+			if ( row == smaller )
+				return getd( data_.HJ + location );
+			else
+				return getd( data_.HJ + location + 1 );
+		} else {
+			return 0.0;
+		}
+	}
+}
+
+double GpuInterface::getB( unsigned int row ) const
+{
+	return getd( data_.HS + 4 * row + 3 );
+}
+
+double GpuInterface::getVMid( unsigned int row ) const
+{
+	return getd( data_.VMid + row );
+}
+
+double GpuInterface::getV( unsigned int row ) const
+{
+	return getd( data_.V + row );
+}
 
