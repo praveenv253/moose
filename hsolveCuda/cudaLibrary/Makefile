@@ -37,3 +37,7 @@ GpuKernels.o: GpuKernels.cu GpuKernels.h ../HSolveStruct.h ../HinesMatrix.h
 
 clean:
 	rm -rf $(CU_DEPS) $(OBJS) libmooseCudaLibrary.so
+
+test: testGpuKernels.cu libmooseCudaLibrary.so
+	LD_LIBRARY_PATH="$LD_LIBRARY_PATH:./" nvcc -g -G -lcuda -lcudart -L./ \
+		-lmooseCudaLibrary -o testGpuKernels testGpuKernels.cu -arch=sm_20

@@ -22,6 +22,9 @@
 # define ASSERT( unused, message ) do {} while ( false )
 #endif
 
+// Forward reference for GpuInterface
+class GpuInterface;
+
 struct JunctionStruct
 {
 	JunctionStruct( unsigned int i, unsigned int r ) :
@@ -49,6 +52,8 @@ struct TreeNodeStruct
 
 class HinesMatrix
 {
+	friend int main();
+
 public:
 	HinesMatrix();
 	
@@ -58,6 +63,8 @@ public:
 	double getA( unsigned int row, unsigned int col ) const;
 	double getB( unsigned int row ) const;
 	double getVMid( unsigned int row ) const;
+
+	GpuInterface *gpu_;
 	
 protected:
 	typedef vector< double >::iterator vdIterator;

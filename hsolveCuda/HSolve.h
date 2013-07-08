@@ -12,7 +12,7 @@
 #include <set>
 
 // Forward reference for GpuInterface
-class GpuInterface;
+//class GpuInterface;
 
 /**
  * HSolve adapts the integrator HSolveActive into a MOOSE class.
@@ -162,7 +162,7 @@ private:
 	unsigned int localIndex( Id id ) const;
 	map< Id, unsigned int > localIndex_;
 
-	GpuInterface *gpu_;
+	//GpuInterface *gpu_;
 	
 	double dt_;
 	string path_;

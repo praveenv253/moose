@@ -18,6 +18,7 @@
 #include "../biophysics/Compartment.h"
 #include "../biophysics/CaConc.h"
 #include "ZombieCaConc.h"
+#include "cudaLibrary/GpuInterface.h"
 using namespace moose;
 //~ #include "ZombieCompartment.h"
 //~ #include "ZombieCaConc.h"
@@ -81,6 +82,7 @@ void HSolveActive::updateMatrix() {
 	 * Copy contents of HJCopy_ into HJ_. Cannot do a vector assign() because
 	 * iterators to HJ_ get invalidated in MS VC++
 	 */
+	/*
 	if ( HJ_.size() != 0 )
 		memcpy( &HJ_[ 0 ], &HJCopy_[ 0 ], sizeof( double ) * HJ_.size() );
 	
@@ -137,6 +139,9 @@ void HSolveActive::updateMatrix() {
 	}
 	
 	stage_ = 0;    // Update done.
+	*/
+
+	gpu_->gpuUpdateMatrix();
 }
 
 void HSolveActive::advanceCalcium() {

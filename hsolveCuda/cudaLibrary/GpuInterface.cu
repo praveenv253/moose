@@ -10,6 +10,8 @@
 #include <vector>
 #include "GpuInterface.h"
 #include "GpuKernels.h"
+#include <cuda.h>
+#include <cuda_runtime.h>
 
 /*
  * Check CUDA return value and handle appropriately
@@ -72,7 +74,8 @@ GpuInterface::GpuInterface(HSolve *hsolve)
 				   data_.junctionSize * sizeof(JunctionStruct),
 				   cudaMemcpyHostToDevice ) );
 
-	// Call to take care of populating GpuInterface::operand_
+	// Call to take care of populating GpuInterface::operand_ and
+	// GpuInterface::backOperand_.
 	makeOperands(hsolve);
 
 	// Allocate and copy memory for operands and backOperands
@@ -308,7 +311,7 @@ double GpuInterface::getA( unsigned int row, unsigned int col ) const
 	unsigned int bigger = row > col ? row : col;
 
 	// If find returns end, it means that `smaller` was not found.
-	if ( groupNumber_.find( smaller ) == groupNumber_.end() ) {
+	if ( hsolve_->groupNumber_.find(smaller) == hsolve_->groupNumber_.end() ) {
 		if ( bigger - smaller == 1 )
 			return getd( data_.HS + 4 * smaller + 1 );
 		else
@@ -316,15 +319,15 @@ double GpuInterface::getA( unsigned int row, unsigned int col ) const
 	} else {
 		// We could use: groupNumber = groupNumber_[ smaller ], but this is a
 		// const function
-		unsigned int groupNumber = hsolve->groupNumber_.find(smaller)->second;
-		const vector< unsigned int >& group = hsolve->coupled_[ groupNumber ];
+		unsigned int groupNumber = hsolve_->groupNumber_.find(smaller)->second;
+		const vector< unsigned int >& group = hsolve_->coupled_[ groupNumber ];
 		unsigned int location, size;
 		unsigned int smallRank, bigRank;
 
 		if ( find( group.begin(), group.end(), bigger ) != group.end() ) {
 			location = 0;
 			for ( int i = 0; i < static_cast< int >( groupNumber ); ++i ) {
-				size = hsolve->coupled_[ i ].size();
+				size = hsolve_->coupled_[ i ].size();
 				location += size * ( size - 1 );
 			}
 

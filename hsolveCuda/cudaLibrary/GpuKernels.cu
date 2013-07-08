@@ -7,9 +7,12 @@
 ** See the file COPYING.LIB for the full notice.
 **********************************************************************/
 
+#include <cstdio>
 #include "GpuKernels.h"
 #include "../HSolveStruct.h"	// For CompartmentStruct, etc.
 #include "../HinesMatrix.h"		// For JunctionStruct
+#include <cuda.h>
+#include <cuda_runtime.h>
 
 __global__ void updateMatrixKernel(GpuDataStruct ds) {
 	/*
@@ -18,7 +21,7 @@ __global__ void updateMatrixKernel(GpuDataStruct ds) {
 	 */
 	if ( ds.HJSize != 0 )
 		memcpy( ds.HJ, ds.HJCopy, sizeof( double ) * ds.HJSize );
-	
+
 	double *ihs = ds.HS;
 	double *iv  = ds.V;
 	
@@ -52,12 +55,18 @@ __global__ void forwardEliminateKernel(GpuDataStruct ds) {
 	double **iop = ds.operand;
 	JunctionStruct *junction;
 	
+	for( int x = 0 ; x < 36 ; x++ ) {		//XXX debugging only
+		printf( "%p ", *(iop + x) );
+	}
+	printf("\n");
+	
 	double pivot;
 	double division;
 	unsigned int index;
 	unsigned int rank;
+	double *j, *s;
 	for ( junction = ds.junction;
-	      junction != ds.junction + ds.junctionSize;
+	      junction < ds.junction + ds.junctionSize;
 	      junction++ )
 	{
 		index = junction->index;
@@ -72,8 +81,14 @@ __global__ void forwardEliminateKernel(GpuDataStruct ds) {
 		
 		pivot = *ihs;
 		if ( rank == 1 ) {
-			double *j = *iop;
-			double *s = *iop + 1;
+			printf("rank=1; ");
+			printf("ic: %d ", ic);
+			printf("ihs: %p ", ihs);
+			printf("iop: %p ", iop);
+			j = *iop;
+			s = *(iop + 1);
+			
+			printf( "s: %p\n", s );
 			
 			division    = *( j + 1 ) / pivot;
 			*( s )     -= division * *j;
@@ -81,16 +96,21 @@ __global__ void forwardEliminateKernel(GpuDataStruct ds) {
 			
 			iop += 3;
 		} else if ( rank == 2 ) {
-			double *j = *iop;
-			double *s;
+			printf("rank=2; ");
+			printf("ic: %d ", ic);
+			printf("ihs: %p ", ihs);
+			printf("iop: %p ", iop);
+			j = *iop;
 			
 			s           = *( iop + 1 );
+			printf( "s: %p ", s );
 			division    = *( j + 1 ) / pivot;
 			*( s )     -= division * *j;
 			*( j + 4 ) -= division * *( j + 2 );
 			*( s + 3 ) -= division * *( ihs + 3 );
 			
 			s           = *( iop + 3 );
+			printf( "s: %p\n", s );
 			division    = *( j + 3 ) / pivot;
 			*( j + 5 ) -= division * *j;
 			*( s )     -= division * *( j + 2 );
@@ -98,6 +118,10 @@ __global__ void forwardEliminateKernel(GpuDataStruct ds) {
 			
 			iop += 5;
 		} else {
+			printf("rank=%d; ", rank);
+			printf("ic: %d ", ic);
+			printf("ihs: %p ", ihs);
+			printf("iop: %p\n", iop);
 			double **end = iop + 3 * rank * ( rank + 1 );
 			for ( ; iop < end; iop += 3 )
 				**iop -= **( iop + 2 ) / pivot * **( iop + 1 );
@@ -132,7 +156,7 @@ __global__ void backwardSubstituteKernel(GpuDataStruct ds) {
 	int index;
 	int rank;
 	for ( ;
-	      junction >= ds.junction;
+	      ds.junction != NULL && junction >= ds.junction;
 	      junction-- )
 	{
 		index = junction->index;

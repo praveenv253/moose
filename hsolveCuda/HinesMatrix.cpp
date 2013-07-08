@@ -428,7 +428,7 @@ ostream& operator <<( ostream& s, const HinesMatrix& m )
 
 void testHinesMatrix()
 {
-	return;
+	//return;
 	//~ cout << "\nTesting HinesMatrix" << flush;
 	vector< int* > childArray;
 	vector< unsigned int > childArraySize;
@@ -689,7 +689,9 @@ void testHinesMatrix()
 		H.setup( tree, dt );
 		
 		// Compare matrices
-		for ( i = 0; i < nCompt; ++i )
+		cout << "Testing Hines Matrix" << endl;
+		cout << "Cell number " << cell << endl;
+		for ( i = 0; i < nCompt; ++i ) {
 			for ( j = 0; j < nCompt; ++j ) {
 				ostringstream error;
 				error << "Testing Hines' Matrix: Cell# "
@@ -698,7 +700,10 @@ void testHinesMatrix()
 					fabs( matrix[ i ][ j ] - H.getA( i, j ) ) < epsilon,
 					error.str()
 				);
+				cout << matrix[i][j] << " ";
 			}
+			cout << endl;
+		}
 	}
 	
 	cout << ".";

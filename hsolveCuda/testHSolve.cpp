@@ -7,7 +7,7 @@
 ** GNU Lesser General Public License version 2.1
 ** See the file COPYING.LIB for the full notice.
 **********************************************************************/
-#ifdef DO_UNIT_TESTS
+//#ifdef DO_UNIT_TESTS
 
 #include <vector>
 #include <map>
@@ -18,14 +18,14 @@ using namespace std;
 extern void testHinesMatrix(); // Defined in HinesMatrix.cpp
 extern void testHSolvePassive(); // Defined in HSolvePassive.cpp
 extern void testHSolveUtils(); // Defined in HSolveUtils.cpp
-
+/*
 void testHSolve()
 {
 	testHSolveUtils();
 	testHinesMatrix();
 	testHSolvePassive();
 }
-
+*/
 //////////////////////////////////////////////////////////////////////////////
 // Helper functions called in testHinesMatrix, testHSolvePassive, etc.
 //////////////////////////////////////////////////////////////////////////////
@@ -103,4 +103,4 @@ void makeFullMatrix(
 	}
 }
 
-#endif
+//#endif

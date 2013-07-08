@@ -18,7 +18,7 @@
 #include "../HSolveActive.h"
 #include "../HSolve.h"						// For HSolve
 
-/** Structure to store data that to be transferred to the GPU */
+/** Structure to store data that is to be transferred to the GPU */
 struct GpuDataStruct {
 	double *HS;							///< Tridiagonal part of Hines matrix
 	double *HJ;							///< Off-diagonal elements
@@ -39,7 +39,7 @@ struct GpuDataStruct {
 	unsigned int junctionSize;
 };
 
-/** 
+/**
  * GpuInterface class that allows each Hines Solver to create its own interface
  * with the GPU.
  */
@@ -62,7 +62,6 @@ class GpuInterface {
 
 		// Functions for unit tests
 		double getA( unsigned int, unsigned int ) const;
-		double getB( unsigned int ) const;
 		double getB( unsigned int ) const;
 		double getV( unsigned int ) const;
 		double getVMid( unsigned int ) const;

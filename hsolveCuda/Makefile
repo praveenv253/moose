@@ -12,7 +12,7 @@ TARGET = _hsolveCuda.o
 
 SUBDIR = \
 	cudaLibrary \
-	test	\
+
 
 OBJ = \
 	HSolveStruct.o \
