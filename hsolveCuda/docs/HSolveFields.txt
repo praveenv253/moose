@@ -49,13 +49,13 @@ class HSolve: public HSolveActive
 
 	void setVMax( double vMax );
 	double getVMax() const;
-		-> Specifies the upper bound for lookup tables of voltage-sensitive
+		-> "Specifies the upper bound for lookup tables of voltage-sensitive
 		   channels. Default is to automatically decide based on the tables of
 		   the channels that the solver reads in."
 
 	void setCaDiv( int caDiv );
 	int getCaDiv() const;
-		-> Specifies number of divisions for lookup tables of calcium-sensitive
+		-> "Specifies number of divisions for lookup tables of calcium-sensitive
 		   channels."
 
 	void setCaMin( double caMin );
@@ -66,23 +66,22 @@ class HSolve: public HSolveActive
 	double getCaMax() const;
 		-> Similar
 	
-	--> The above 6 fields will have to be looked into while generating the
-	    said lookup tables. The size of these tables needs to be determined.
-	    It would be useful to find out if these tables would fit into the
-	    constant memory space for the sake of optimization. Note: constant
-	    memory size is only 64KB, even for compute capability 3.5!
+	-> The above 6 fields will have to be looked into while generating the
+	   said lookup tables. The size of these tables needs to be determined.
+	   It would be useful to find out if these tables would fit into the
+	   constant memory space for the sake of optimization. Note: constant
+	   memory size is only 64KB, even for compute capability 3.5!
 	
 	double getInitVm( Id id ) const;
 	void setInitVm( Id id, double value );
-		-> returns / sets tree_[ id ].initVm => Need to find out what tree_[id]
-		   stores. #TODO
-		   I believe tree_[ id ] stores the relevant compartment's info.
+		-> returns / sets tree_[ id ].initVm
+		   tree_[ id ] stores the relevant compartment's info.
 		   initVm stores the intial Vm value for that compartment. It will
 		   be set as Vm on reinit.
 	
 	double getVm( Id id ) const;
 	void setVm( Id id, double value );
-		-> returns / sets V_[ id ] => Need to find out what V_ is storing.
+		-> returns / sets V_[ id ]
 		   V_ stores compartment Vm values.
 	
 	double getCm( Id id ) const;
@@ -110,13 +109,13 @@ class HSolve: public HSolveActive
 		-> compartment_[ id ].EmByRm - V_[ id ] / tree_[ id ].Rm; 
 		   for ( ; icurrent < currentBoundary_[ index ]; ++icurrent )
 		       Im += ( icurrent->Ek - V_[ index ] ) * icurrent->Gk;
-		   Need to understand how icurrent is initialized. For this I need to
-		   understand what current_ and currentBoundary_ contain. #TODO
+		   current_ is a vector of currents in each channel of all compartments
+		   currentBoundary_ stores an iterator into this current_ vector,
+		   demarcating where the next compartment boundary starts.
 	
 	// Ia is read-only
 	double getIa( Id id ) const;
-		-> Returns 0! What on earth!?
-		   No axial currents? Why? #TODO
+		-> Returns 0! #TODO
 	
 	double getInject( Id id ) const;
 	void setInject( Id id, double value );
@@ -229,8 +228,7 @@ class HSolve: public HSolveActive
 
 	void setTauB( Id id, double tau, double B );
 		-> caConc_[ index ].setTauB( tau, B, dt_ );
-		   Obviously some kind of rate constant. Need to figure this one out.
-		   #TODO
+		   Some kind of rate constant. #TODO
 	
 	double getCaCeiling( Id id ) const;
 	void setCaCeiling( Id id, double floor );
@@ -300,20 +298,19 @@ private:
 
 --------------------------------------------------------------------------------
 
-First I want to see what this CurrentStruct is:
+HSolveStruct.h
 
-Good lord! There's a whole HSolveStruct.h file and I just didn't see it!
+Contains declarations of the various structures used in the HSolve code.
 
 typedef double ( *PFDD )( double, double );
 	-> Just a typedef for a certain kind of function pointer.
 
 struct CompartmentStruct
-	-> Struct to hold a compartment? => Check. #TODO
+	-> Struct to hold compartment info
 {
 	double CmByDt;
 	double EmByRm;
 };
-	-> Need to figure out what the data members are for by reading setup
 
 struct InjectStruct
 	-> InjectStruct stores two different kinds of injected currents - one is a
@@ -354,14 +351,15 @@ public:
 	PFDD takeYpower_;
 	PFDD takeZpower_;
 		-> Some clever method of actually applying the power on the fraction
-		   of gates, if I'm not wrong.
+		   of gates.
 	double Xpower_;
 	double Ypower_;
 	double Zpower_;
 		-> The actual powers for each gate
 	int instant_;
 		-> Instantaneously change conductance - conductance follows no kinetics
-		   It's like tau = 0 => conductance change directly mirrors voltage step
+		   It's like tau = 0 => conductance change directly mirrors voltage
+		   step
 	
 	void setPowers( double Xpower, double Ypower, double Zpower );
 		-> Sets the powers and accordingly sets the takePower_ functions.
@@ -698,8 +696,7 @@ private:
 
 --------------------------------------------------------------------------------
 
-And now for HSolvePassive
-(At least this one is small...)
+HSolvePassive.h
 
 class HSolvePassive: public HinesMatrix
 {
@@ -760,8 +757,11 @@ struct JunctionStruct
 		return ( index < other.index );
 	}
 	
-	unsigned int index;	#TODO
+	unsigned int index;
+		-> Hines index of the compartment.
 	unsigned int rank;
+		-> Number of elements remaining in this compartments group: i.e.,
+		   number of children with a larger Hines index + 1 for the parent.
 };
 
 struct TreeNodeStruct
@@ -769,7 +769,7 @@ struct TreeNodeStruct
 	vector< unsigned int > children;
 		-> Child compartments
 	double Ra;
-		-> Axial resistance (probably to parent) #TODO
+		-> Axial resistance of this compartment
 	double Rm;
 		-> Membrane resistance
 	double Cm;
@@ -849,7 +849,7 @@ private:
 		   Hines index of the corresponding child compartment.
 		   So essentially, at each branch, a JunctionStruct is created for each
 		   child, which contains the hines index of that child and its rank,
-		   which is group-size() - childIndex - 1. Weird. #TODO
+		   which is group-size() - childIndex - 1.
 	void makeMatrix();
 		-> Populates HS_ and HJ_. All of the electrical circuit analysis goes
 		   into this one single function (and updateMatrix, of course).
@@ -871,8 +871,10 @@ private:
 		   compartment and the compartment itself.
 		   coupled_ is therefore a vector of such vectors.
 	map< unsigned int, vdIterator >          operandBase_;
-		-> #TODO
+		-> Contains iterators into HJ_ demarcating where a child's neighbours
+		   begin. Used for iterating through HJ_ along with junction_
 	map< unsigned int, unsigned int >        groupNumber_;
-		-> #TODO
+		-> Tells you the index of a compartment's group within coupled_, given
+		   the compartment's Hines index.
 };
 
