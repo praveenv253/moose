@@ -69,7 +69,8 @@ BUILD=release
 endif
 
 # Extra flags required for GPU compilation
-#CUDA_EXTRA_FLAGS = -L/usr/local/cuda/lib64 -lcuda -lcudart -lm -L../mooseCudaLibrary/Debug -lmooseCudaLibrary
+CWD = $(shell pwd)
+CUDA_EXTRA_FLAGS = -L/usr/local/cuda/lib64 -lcuda -lcudart -lm -L$(CWD)/hsolveCuda/cudaLibrary -lmooseCudaLibrary
 
 #If using mac uncomment the following lines
 # PLATFORM=mac
@@ -278,7 +279,6 @@ SUBDIR = \
 	msg \
 	shell \
 	biophysics\
-	hsolve\
 	randnum\
 	scheduling\
 	builtins\
@@ -295,7 +295,8 @@ SUBDIR = \
 	$(SMOLDYN_DIR) \
 	$(SBML_DIR) \
 	trials \
-#	hsolveCuda \
+	hsolveCuda \
+#	hsolve
 
 
 # Used for 'make clean'
@@ -306,7 +307,6 @@ OBJLIBS =	\
 	msg/_msg.o \
 	shell/_shell.o \
 	biophysics/_biophysics.o \
-	hsolve/_hsolve.o \
 	randnum/_randnum.o \
 	scheduling/_scheduling.o \
 	builtins/_builtins.o \
@@ -323,7 +323,8 @@ OBJLIBS =	\
 	$(SMOLDYN_LIB) \
 	$(SBML_LIB) \
 	trials/_trials.o \
-#	hsolveCuda/_hsovleCuda.o \
+	hsolveCuda/_hsolveCuda.o \
+#	hsolve/_hsolve.o
 
 export CXX
 export CXXFLAGS
@@ -371,7 +372,7 @@ pymoose: LDFLAGS += $(PYTHON_LDFLAGS)
 export CXXFLAGS
 python/moose/_moose.so: libs $(OBJLIBS) basecode/_basecode_pymoose.o
 	$(MAKE) -C pymoose
-	$(CXX) -shared $(LDFLAGS) $(CXXFLAGS) -o $@ $(OBJLIBS) $(LIBS)
+	$(CXX) -shared $(LDFLAGS) $(CXXFLAGS) -o $@ $(OBJLIBS) $(LIBS) $(CUDA_EXTRA_FLAGS) 
 	@echo "pymoose module built."
 
 # This will generate an object file without main
