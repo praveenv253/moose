@@ -272,6 +272,11 @@ void GpuInterface::gpuBackwardSubstitute()
 	stage_ = 2;    // Backward substitution done.
 }
 
+void GpuInterface::synchronize()
+{
+	cudaDeviceSynchronize();
+}
+
 // getA and getB functions used in unit tests for comparing matrix element
 // values.
 
@@ -366,15 +371,29 @@ double GpuInterface::getV( unsigned int row ) const
 
 void GpuInterface::unsetup()
 {
-	// Copy data from the GPU back to the CPU
-	_( cudaMemcpy( &hsolve_->HS_[0], data_.HS, 4*data_.nCompts*sizeof(double),
+	// Create temporary storage space before assigning the vectors in HSolve.
+	double *HS = new double[ 4 * data_.nCompts ];
+	double *HJ = new double[ data_.HJSize ];
+	double *V = new double[ data_.nCompts ];
+
+	// Copy data from the GPU back to the CPU and then into the HSolve vectors
+	_( cudaMemcpy( HS, data_.HS, 4 * data_.nCompts * sizeof(double),
 				   cudaMemcpyDeviceToHost ) );
-	_( cudaMemcpy( &hsolve_->HJ_[0], data_.HJ, data_.HJSize * sizeof(double),
+	hsolve_->HS_.assign( HS, HS + 4 * data_.nCompts );
+
+	_( cudaMemcpy( HJ, data_.HJ, data_.HJSize * sizeof(double),
 				   cudaMemcpyDeviceToHost ) );
-	_( cudaMemcpy( &hsolve_->V_[0], data_.V, data_.nCompts * sizeof(double),
+	hsolve_->HJ_.assign( HJ, HJ + data_.HJSize );
+
+	_( cudaMemcpy( HJ, data_.HJCopy, data_.HJSize * sizeof(double),
 				   cudaMemcpyDeviceToHost ) );
-	_( cudaMemcpy( &hsolve_->VMid_[0], data_.VMid,
-				   data_.nCompts * sizeof(double), cudaMemcpyDeviceToHost ) );
-	_( cudaMemcpy( &hsolve_->HJCopy_[0], data_.HJCopy,
-				   data_.HJSize * sizeof(double), cudaMemcpyDeviceToHost ) );
+	hsolve_->HJCopy_.assign( HJ, HJ + data_.HJSize );
+
+	_( cudaMemcpy( V, data_.V, data_.nCompts * sizeof(double),
+				   cudaMemcpyDeviceToHost ) );
+	hsolve_->V_.assign( V, V + data_.nCompts );
+
+	_( cudaMemcpy( V, data_.VMid, data_.nCompts * sizeof(double),
+				   cudaMemcpyDeviceToHost ) );
+	hsolve_->VMid_.assign( V, V + data_.nCompts );
 }

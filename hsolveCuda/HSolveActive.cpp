@@ -58,7 +58,8 @@ void HSolveActive::step( ProcPtr info ) {
 	HSolvePassive::forwardEliminate();
 	HSolvePassive::backwardSubstitute();
 
-	// Get data back from the GPU now.
+	// Synchronize and get data back from the GPU now.
+	gpu_->synchronize();
 	gpu_->unsetup();
 
 	// Proceed in the CPU

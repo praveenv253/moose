@@ -59,6 +59,7 @@ class GpuInterface {
 		void gpuUpdateMatrix();
 		void gpuForwardEliminate();
 		void gpuBackwardSubstitute();
+		void synchronize();
 
 		// Functions for unit tests
 		double getA( unsigned int, unsigned int ) const;
