@@ -51,9 +51,17 @@ void HSolveActive::step( ProcPtr info ) {
 	
 	advanceChannels( info->dt );
 	calculateChannelCurrents();
+
+	// Computation enters the GPU at this point (data has already been
+	// transferred.
 	updateMatrix();
 	HSolvePassive::forwardEliminate();
 	HSolvePassive::backwardSubstitute();
+
+	// Get data back from the GPU now.
+	gpu_->unsetup();
+
+	// Proceed in the CPU
 	advanceCalcium();
 	advanceSynChans( info );
 	
