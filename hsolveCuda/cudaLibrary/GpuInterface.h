@@ -65,6 +65,13 @@ class GpuInterface {
 		double getB( unsigned int ) const;
 		double getV( unsigned int ) const;
 		double getVMid( unsigned int ) const;
+
+		/**
+		 * Single-step-synchronization function - you can test by syncing
+		 * after every time step and un-setup-ing, i.e. copying back all
+		 * modified data from the GPU. Useful for debugging.
+		 */
+		void unsetup();
 };
 
 #endif

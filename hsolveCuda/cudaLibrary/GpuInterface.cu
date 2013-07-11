@@ -364,3 +364,17 @@ double GpuInterface::getV( unsigned int row ) const
 	return getd( data_.V + row );
 }
 
+void GpuInterface::unsetup()
+{
+	// Copy data from the GPU back to the CPU
+	_( cudaMemcpy( &hsolve_->HS_[0], data_.HS, 4*data_.nCompts*sizeof(double),
+				   cudaMemcpyDeviceToHost ) );
+	_( cudaMemcpy( &hsolve_->HJ_[0], data_.HJ, data_.HJSize * sizeof(double),
+				   cudaMemcpyDeviceToHost ) );
+	_( cudaMemcpy( &hsolve_->V_[0], data_.V, data_.nCompts * sizeof(double),
+				   cudaMemcpyDeviceToHost ) );
+	_( cudaMemcpy( &hsolve_->VMid_[0], data_.VMid,
+				   data_.nCompts * sizeof(double), cudaMemcpyDeviceToHost ) );
+	_( cudaMemcpy( &hsolve_->HJCopy_[0], data_.HJCopy,
+				   data_.HJSize * sizeof(double), cudaMemcpyDeviceToHost ) );
+}
