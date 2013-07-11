@@ -19,8 +19,38 @@
 #include "../HSolve.h"						// For HSolve
 #include "../testGpuInterface.h"			// For testing this class
 
+/** Structure to store the GPU version of a lookup table */
+struct GpuLookupTable {
+	double *table;
+	double min;
+	double max;
+	double dx;
+	unsigned int nPts;	// Not required?
+	unsigned int nColumns;
+};
+
+/**
+ * Structure to store the GPU version of a lookup row. This is not really
+ * any different from the ordinary LookupRow. I just did not want to include
+ * another header file and create complications.
+ */
+struct GpuLookupRow {
+	double *row;
+	double fraction;
+};
+
+/**
+ * Structure to store the GPU version of a lookup column. This can effectively
+ * be just a single integer, but I am keeping it the same as the CPU version
+ * for better extensibility.
+ */
+struct GpuLookupColumn {
+	unsigned int column;
+};
+
 /** Structure to store data that is to be transferred to the GPU */
 struct GpuDataStruct {
+	/** Data structures for HSolvePassive */
 	double *HS;							///< Tridiagonal part of Hines matrix
 	double *HJ;							///< Off-diagonal elements
 	double *V;							///< Vm values of compartments
@@ -31,6 +61,30 @@ struct GpuDataStruct {
 	CompartmentStruct *compartment;		///< Array of compartments
 	JunctionStruct *junction;			///< Array of junctions
 
+	/** Data structures for HSolveActive */		// TODO: arrange these neatly
+	ChannelStruct		 *channel;
+	int					 *channelCount;
+	CurrentStruct		 *current;
+	CurrentStruct		 **currentBoundary;
+	double				 *state;
+	SpikeGenStruct		 *spikegen;
+	CaConcStruct		 *caConc;
+	double				 *ca;
+	double				 *caActivation;
+	double				 **caTarget;
+	unsigned int		 *caCount;
+	// gCaDepend and caDependIndex are only used in setup, I think.
+
+	// Lookup table stuff
+	GpuLookupTable		 vTable;
+	GpuLookupTable		 caTable;
+	GpuLookupColumn		 *column;
+	GpuLookupRow		 *caRowCompt;
+	GpuLookupRow		 **caRow;
+	// Id fields will be looked into later.
+	// Will also look into outVm and outCa later.
+
+	/** Sizes of elements for HSolvePassive */
 	// Thse do not need to be passed by reference because they are not going
 	// to be changed by any kernel.
 	unsigned int nCompts;
@@ -38,6 +92,15 @@ struct GpuDataStruct {
 	unsigned int operandSize;
 	unsigned int backOperandSize;
 	unsigned int junctionSize;
+
+	/** Sizes of elements for HSolveActive */
+	unsigned int nChannels;		///< Number of channels and current elements
+	unsigned int stateSize;		///< Number of states across all channels
+	unsigned int nCaPools;		///< Number of calcium pools in each compt
+
+	static const int INSTANT_X;
+	static const int INSTANT_Y;
+	static const int INSTANT_Z;
 };
 
 /**

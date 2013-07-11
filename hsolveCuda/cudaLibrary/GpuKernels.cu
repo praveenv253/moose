@@ -33,6 +33,10 @@ __global__ void updateMatrixKernel(GpuDataStruct ds) {
 		*( 3 + ihs ) = *iv * ic->CmByDt + ic->EmByRm;
 		ihs += 4, ++iv;
 	}
+	
+	// Not going to consider inject in GPU implementation at all.
+	// Compartments with inject members can be declared as HSolve instead of
+	// HSolveCuda.
 }
 
 __global__ void forwardEliminateKernel(GpuDataStruct ds) {
@@ -129,12 +133,12 @@ __global__ void forwardEliminateKernel(GpuDataStruct ds) {
 __global__ void backwardSubstituteKernel(GpuDataStruct ds) {
 	// We are reverse iterating here, so all pointers are initialized to the
 	// ultimate elements of their respective arrays.
-	int ic = ds.nCompts - 1;
-	double *ivmid = ds.VMid + ic;
-	double *iv = ds.V + ic;
-	double *ihs = ds.HS + 4 * ds.nCompts - 1;
-	double **iop = ds.operand + ds.operandSize - 1;
-	double **ibop = ds.backOperand + ds.backOperandSize - 1;
+	int 	ic		 = ds.nCompts - 1;
+	double *ivmid	 = ds.VMid + ic;
+	double *iv		 = ds.V + ic;
+	double *ihs		 = ds.HS + 4 * ds.nCompts - 1;
+	double **iop	 = ds.operand + ds.operandSize - 1;
+	double **ibop	 = ds.backOperand + ds.backOperandSize - 1;
 	JunctionStruct *junction = ds.junction + ds.junctionSize - 1;
 	
 	printf("In gpu: %lf %lf\n", ihs[-3], ihs[0]);
@@ -201,3 +205,181 @@ __global__ void backwardSubstituteKernel(GpuDataStruct ds) {
 	printf("V in gpu: %lf %lf\n", ds.VMid[0], ds.V[0]);
 }
 
+__device__ void findRow(GpuLookupTable table, double value, GpuLookupRow &row)
+{
+	if ( value < table.min )
+		value = table.min;
+	else if ( value > table.max )
+		value = table.max;
+
+	double div = ( value - table.min ) / table.dx;
+	unsigned int integer = ( unsigned int )( div );
+
+	row.fraction = div - integer;
+	row.row = table.table + integer * table.nColumns;
+}
+
+__device__ void lookupTable(GpuLookupTable table, GpuLookupColumn column,
+							GpuLookupRow row, double &C1, double &C2)
+{
+	double a, b;
+	double *ap, *bp;
+
+	ap = row.row + column.column;
+
+	bp = ap + table.nColumns;
+
+	a = *ap;
+	b = *bp;
+	C1 = a + ( b - a ) * row.fraction;
+
+	a = *( ap + 1 );
+	b = *( bp + 1 );
+	C2 = a + ( b - a ) * row.fraction;
+}
+
+__global__ void advanceChannelsKernel(GpuDataStruct ds, double dt)
+{
+	double			 *iv;
+	double			 *istate		 = ds.state;
+	int				 *ichannelcount	 = ds.channelCount;
+	ChannelStruct	 *ichan			 = ds.channel;
+	ChannelStruct	 *chanBoundary;
+	unsigned int	 *icacount		 = ds.caCount;
+	double			 *ica			 = ds.ca;
+	double			 *caBoundary;
+	GpuLookupColumn	 *icolumn		 = ds.column;
+	GpuLookupRow	 *icarowcompt;
+	GpuLookupRow	 **icarow		 = ds.caRow;
+
+	LookupRow vRow;
+	double C1, C2;
+	for ( iv = ds.V ; iv != ds.V + ds.nCompts ; ++iv ) {
+		findRow( ds.vTable, *iv, vRow );
+		icarowcompt = ds.caRowCompt;
+		caBoundary = ica + *icacount;
+		for ( ; ica < caBoundary; ++ica, ++icarowcompt )
+			findRow( ds.caTable, *ica, *icarowcompt );
+
+		/*
+		 * Optimize by moving "if ( instant )" outside the loop, because it is
+		 * rarely used. May also be able to avoid "if ( power )".
+		 *
+		 * Or not: excellent branch predictors these days.
+		 *
+		 * Will be nice to test these optimizations.
+		 */
+		chanBoundary = ichan + *ichannelcount;
+		for ( ; ichan < chanBoundary ; ++ichan ) {
+			if ( ichan->Xpower_ > 0.0 ) {
+				lookupTable( ds.vTable, *icolumn, vRow, C1, C2 );
+				if ( ichan->instant_ & ds.INSTANT_X )
+					*istate = C1 / C2;
+				else {
+					double temp = 1.0 + dt / 2.0 * C2;
+					*istate = ( *istate * ( 2.0 - temp ) + dt * C1 ) / temp;
+				}
+				++icolumn, ++istate;
+			}
+
+			if ( ichan->Ypower_ > 0.0 ) {
+				lookupTable( ds.vTable, *icolumn, vRow, C1, C2 );
+				if ( ichan->instant_ & ds.INSTANT_Y )
+					*istate = C1 / C2;
+				else {
+					double temp = 1.0 + dt / 2.0 * C2;
+					*istate = ( *istate * ( 2.0 - temp ) + dt * C1 ) / temp;
+				}
+				++icolumn, ++istate;
+			}
+
+			if ( ichan->Zpower_ > 0.0 ) {
+				LookupRow *caRow = *icarow;
+				if ( caRow ) {
+					lookupTable( ds.caTable, *icolumn, *caRow, C1, C2 );
+				} else {
+					lookupTable( ds.vTable, *icolumn, vRow, C1, C2 );
+				}
+
+				if ( ichan->instant_ & ds.INSTANT_Z )
+					*istate = C1 / C2;
+				else {
+					double temp = 1.0 + dt / 2.0 * C2;
+					*istate = ( *istate * ( 2.0 - temp ) + dt * C1 ) / temp;
+				}
+
+				++icolumn, ++istate, ++icarow;
+			}
+		}
+
+		++ichannelcount, ++icacount;
+	}
+}
+
+__global__ void calculateChannelCurrentsKernel(GpuDataStruct ds)
+{
+	ChannelStruct *ichan;
+	CurrentStruct *icurrent = ds.current;
+
+	if ( stateSize != 0 ) {
+		double *istate = ds.state;
+
+		for ( ichan = ds.channel ; ichan != ds.channel + ds.nChannels ;
+			  ++ichan, ++icurrent )
+		{
+			// Stuff inside ichan->process
+			double fraction = 1;
+			// No complications for taking power
+			if ( ichan->Xpower_ > 0.0 )
+				fraction *= pow( *( istate++ ), ichan->Xpower_ );
+			if ( ichan->Ypower_ > 0.0 )
+				fraction *= pow( *( istate++ ), ichan->Ypower_ );
+			if ( ichan->Zpower_ > 0.0 )
+				fraction *= pow( *( istate++ ), ichan->Zpower_ );
+			icurrent->Gk = ichan->Gbar_ * fraction;
+		}
+	}
+}
+
+__global__ void advanceCalciumKernel(GpuDataStruct ds)
+{
+	double **icatarget = ds.caTarget;
+	double *ivmid = ds.VMid;
+	CurrentStruct *icurrent = ds.current;
+	CurrentStruct **iboundary = ds.currentBoundary;
+
+	// Reset caActivation to zero
+	memset( ds.caActivation, 0.0, ds.nCaPools );
+
+	// caAdvance is just taken to be 1. The 0 case is not implemented.
+
+	// There are as many current boundaries as there are compartments.
+	for ( ; iboundary != ds.currentBoundary + ds.nCompts ; ++iboundary ) {
+		for ( ; icurrent < *iboundary ; ++icurrent ) {
+			if ( *icatarget )
+				**icatarget += icurrent->Gk * ( icurrent->Ek - *ivmid );
+			++icatarget;
+		}
+		++ivmid;
+	}
+
+	CaConcStruct *icaconc;
+	double *icaactivation = ds.caActivation;
+	double *ica = ds.ca;
+	for ( icaconc = ds.caConc ; icaconc != ds.caConc + nCaPools ; ++icaconc ) {
+		// CaConcStruct::process has been inserted here, fully expanded
+		icaconc->c_ = 	icaconc->factor1_ * icaconc->c_
+					  + icaconc->factor2_ * *icaactivation;
+		double ca = icaconc->CaBasal_ + icaconc->c_;
+		if ( icaconc->ceiling_ > 0 && ca > icaconc->ceiling_ ) {
+			ca = icaconc->ceiling_;
+			icaconc->c_ = ca - icaconc->CaBasal_;	// CaConcStruct::setCa
+		}
+		if ( ca < icaconc->floor_ ) {
+			ca = icaconc->floor_;
+			icaconc->c_ = ca - icaconc->CaBasal;	// CaConcStruct::setCa
+		}
+		*ica = ca;
+		++ica, ++icaactivation;
+	}
+}
