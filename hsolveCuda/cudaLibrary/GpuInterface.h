@@ -121,12 +121,20 @@ class GpuInterface {
 		HSolve *hsolve_;
 
 	public:
+		// Setup
 		GpuInterface( HSolve * );
 		void makeOperands( HSolve * );
+
+		// HSolvePassive functions
 		void gpuUpdateMatrix();
 		void gpuForwardEliminate();
 		void gpuBackwardSubstitute();
 		void synchronize();
+
+		// HSolveActive functions
+		void gpuAdvanceChannels( double );
+		void gpuCalculateChannelCurrents();
+		void gpuAdvanceCalcium();
 
 #ifdef DO_UNIT_TESTS
 		// Functions for unit tests

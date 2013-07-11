@@ -347,6 +347,30 @@ void GpuInterface::unsetup()
 
 }
 
+void GpuInterface::gpuAdvanceChannels( double dt )
+{
+	dim3 numBlocks(numBlocks_);
+	dim3 numThreads(numThreads_);
+
+	advanceChannelsKernel<<< numBlocks, numThreads >>>( data_, dt );
+}
+
+void GpuInterface::gpuCalculateChannelCurrents()
+{
+	dim3 numBlocks(numBlocks_);
+	dim3 numThreads(numThreads_);
+
+	calculateChannelCurrentsKernel( data_ );
+}
+
+void GpuInterface::gpuAdvanceCalcium()
+{
+	dim3 numBlocks(numBlocks_);
+	dim3 numThreads(numThreads_);
+
+	advanceCalciumKernel( data_ );
+}
+
 #ifdef DO_UNIT_TESTS
 
 // getA and getB functions used in unit tests for comparing matrix element
