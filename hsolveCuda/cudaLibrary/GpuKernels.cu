@@ -252,13 +252,16 @@ __global__ void advanceChannelsKernel(GpuDataStruct ds, double dt)
 	GpuLookupRow	 *icarowcompt;
 	GpuLookupRow	 **icarow		 = ds.caRow;
 
-	LookupRow vRow;
+	GpuLookupRow vRow;
 	double C1, C2;
 	for ( iv = ds.V ; iv != ds.V + ds.nCompts ; ++iv ) {
 		findRow( ds.vTable, *iv, vRow );
 		icarowcompt = ds.caRowCompt;
 		caBoundary = ica + *icacount;
 		for ( ; ica < caBoundary; ++ica, ++icarowcompt )
+			// Implicitly assumes that we are not going out of bounds for
+			// caRowCompt! => The size of caRowCompt must be the max number of
+			// calcium pools out of all compartments.
 			findRow( ds.caTable, *ica, *icarowcompt );
 
 		/*
@@ -273,7 +276,7 @@ __global__ void advanceChannelsKernel(GpuDataStruct ds, double dt)
 		for ( ; ichan < chanBoundary ; ++ichan ) {
 			if ( ichan->Xpower_ > 0.0 ) {
 				lookupTable( ds.vTable, *icolumn, vRow, C1, C2 );
-				if ( ichan->instant_ & ds.INSTANT_X )
+				if ( ichan->instant_ & INSTANT_X )
 					*istate = C1 / C2;
 				else {
 					double temp = 1.0 + dt / 2.0 * C2;
@@ -284,7 +287,7 @@ __global__ void advanceChannelsKernel(GpuDataStruct ds, double dt)
 
 			if ( ichan->Ypower_ > 0.0 ) {
 				lookupTable( ds.vTable, *icolumn, vRow, C1, C2 );
-				if ( ichan->instant_ & ds.INSTANT_Y )
+				if ( ichan->instant_ & INSTANT_Y )
 					*istate = C1 / C2;
 				else {
 					double temp = 1.0 + dt / 2.0 * C2;
@@ -294,14 +297,14 @@ __global__ void advanceChannelsKernel(GpuDataStruct ds, double dt)
 			}
 
 			if ( ichan->Zpower_ > 0.0 ) {
-				LookupRow *caRow = *icarow;
+				GpuLookupRow *caRow = *icarow;
 				if ( caRow ) {
 					lookupTable( ds.caTable, *icolumn, *caRow, C1, C2 );
 				} else {
 					lookupTable( ds.vTable, *icolumn, vRow, C1, C2 );
 				}
 
-				if ( ichan->instant_ & ds.INSTANT_Z )
+				if ( ichan->instant_ & INSTANT_Z )
 					*istate = C1 / C2;
 				else {
 					double temp = 1.0 + dt / 2.0 * C2;
@@ -321,7 +324,7 @@ __global__ void calculateChannelCurrentsKernel(GpuDataStruct ds)
 	ChannelStruct *ichan;
 	CurrentStruct *icurrent = ds.current;
 
-	if ( stateSize != 0 ) {
+	if ( ds.stateSize != 0 ) {
 		double *istate = ds.state;
 
 		for ( ichan = ds.channel ; ichan != ds.channel + ds.nChannels ;
@@ -366,7 +369,7 @@ __global__ void advanceCalciumKernel(GpuDataStruct ds)
 	CaConcStruct *icaconc;
 	double *icaactivation = ds.caActivation;
 	double *ica = ds.ca;
-	for ( icaconc = ds.caConc ; icaconc != ds.caConc + nCaPools ; ++icaconc ) {
+	for( icaconc = ds.caConc; icaconc != ds.caConc + ds.nCaPools; ++icaconc ) {
 		// CaConcStruct::process has been inserted here, fully expanded
 		icaconc->c_ = 	icaconc->factor1_ * icaconc->c_
 					  + icaconc->factor2_ * *icaactivation;
@@ -377,7 +380,7 @@ __global__ void advanceCalciumKernel(GpuDataStruct ds)
 		}
 		if ( ca < icaconc->floor_ ) {
 			ca = icaconc->floor_;
-			icaconc->c_ = ca - icaconc->CaBasal;	// CaConcStruct::setCa
+			icaconc->c_ = ca - icaconc->CaBasal_;	// CaConcStruct::setCa
 		}
 		*ica = ca;
 		++ica, ++icaactivation;

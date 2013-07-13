@@ -25,8 +25,11 @@ struct GpuLookupTable {
 	double min;
 	double max;
 	double dx;
-	unsigned int nPts;	// Not required?
+	unsigned int nPts;
 	unsigned int nColumns;
+
+	GpuLookupTable() {}
+	GpuLookupTable( LookupTable );
 };
 
 /**
@@ -61,13 +64,13 @@ struct GpuDataStruct {
 	CompartmentStruct *compartment;		///< Array of compartments
 	JunctionStruct *junction;			///< Array of junctions
 
-	/** Data structures for HSolveActive */		// TODO: arrange these neatly
+	/** Data structures for HSolveActive */
 	ChannelStruct		 *channel;
 	int					 *channelCount;
 	CurrentStruct		 *current;
 	CurrentStruct		 **currentBoundary;
 	double				 *state;
-	SpikeGenStruct		 *spikegen;
+	//SpikeGenStruct		 *spikegen;		// TODO
 	CaConcStruct		 *caConc;
 	double				 *ca;
 	double				 *caActivation;
@@ -96,11 +99,10 @@ struct GpuDataStruct {
 	/** Sizes of elements for HSolveActive */
 	unsigned int nChannels;		///< Number of channels and current elements
 	unsigned int stateSize;		///< Number of states across all channels
-	unsigned int nCaPools;		///< Number of calcium pools in each compt
-
-	static const int INSTANT_X;
-	static const int INSTANT_Y;
-	static const int INSTANT_Z;
+	unsigned int nCaPools;		///< Number of calcium pools in all compts
+	unsigned int caRowComptSize;	/** caRowCompt has a size equal to the max
+									 * number of calcium pools out of all
+									 * compts. */
 };
 
 /**

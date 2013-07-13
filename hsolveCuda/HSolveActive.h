@@ -84,7 +84,7 @@ protected:
 	vector< unsigned int >    outVm_;
 	vector< unsigned int >    outCa_;
 	
-private:
+//private:
 	/**
 	 * Setting up of data structures: Defined in HSolveActiveSetup.cpp
 	 */

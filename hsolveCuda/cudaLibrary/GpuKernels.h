@@ -12,6 +12,11 @@
 
 #include "GpuInterface.h"
 
+// Constants needed for active channels
+__constant__ int INSTANT_X;
+__constant__ int INSTANT_Y;
+__constant__ int INSTANT_Z;
+
 // HSolvePassive stuff
 __global__ void updateMatrixKernel(GpuDataStruct);
 __global__ void forwardEliminateKernel(GpuDataStruct);
@@ -20,7 +25,7 @@ __global__ void backwardSubstituteKernel(GpuDataStruct);
 // HSolveActive stuff
 __global__ void advanceChannelsKernel(GpuDataStruct, double);
 __global__ void calculateChannelCurrentsKernel(GpuDataStruct);
-__gloabl__ void advanceCalciumKernel(GpuDataStruct);
+__global__ void advanceCalciumKernel(GpuDataStruct);
 // No need for advanceSynChans, since we will do buffering and get back to the
 // CPU for that.
 

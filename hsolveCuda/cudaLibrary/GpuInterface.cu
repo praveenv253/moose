@@ -27,6 +27,29 @@
 }
 
 /**
+ * Constructor for the GpuLookupTable structure.
+ * Copies non-pointer data elements of the structure and allocates and copies
+ * the table data into the GPU
+ *
+ * Requires the LookupTable class to have fields that are accessible by this
+ * class. One way is to make the fields of LookupTable public (as has been
+ * temporarily done). The other is to make LookupTable have protected fields
+ * and then inherit GpuLookupTable from LookupTable.
+ */
+GpuLookupTable::GpuLookupTable(LookupTable t)
+{
+	min = t.min_;
+	max = t.max_;
+	dx = t.dx_;
+	nPts = t.nPts_;
+	nColumns = t.nColumns_;
+
+	_( cudaMalloc( (void **) &table, nPts * nColumns * sizeof(double) ) );
+	_( cudaMemcpy( table, &t.table_[0], nPts * nColumns * sizeof(double),
+				   cudaMemcpyHostToDevice ) );
+}
+
+/**
  * Constructor for the GpuInterface class.
  * Allocates memory for all data elements in the GPU. Transfers data from CPU
  * to GPU.
@@ -35,6 +58,10 @@ GpuInterface::GpuInterface(HSolve *hsolve)
 {
 	// Save the pointer!
 	hsolve_ = hsolve;
+
+	//////////////////////////////////////////////////
+	// HSolvePassive data
+	//////////////////////////////////////////////////
 
 	// Find the required sizes of elements
 	data_.nCompts = hsolve->V_.size();
@@ -126,6 +153,127 @@ GpuInterface::GpuInterface(HSolve *hsolve)
 	} else {
 		data_.backOperand = NULL;
 	}
+
+	//////////////////////////////////////////////////
+	// HSolveActive data
+	//////////////////////////////////////////////////
+
+	data_.nChannels = hsolve->channel_.size();
+	data_.stateSize = hsolve->state_.size();
+	data_.nCaPools = hsolve->caConc_.size();
+	data_.caRowComptSize = *( max_element( hsolve_->caCount_.begin(),
+										   hsolve_->caCount_.end() ) );
+
+	_( cudaMalloc( (void **) &data_.channel,
+				   data_.nChannels * sizeof(ChannelStruct) ) );
+	_( cudaMalloc( (void **) &data_.channelCount,
+				   data_.nCompts * sizeof(int) ) );
+	_( cudaMalloc( (void **) &data_.current,
+				   data_.nChannels * sizeof(CurrentStruct) ) );
+	_( cudaMalloc( (void **) &data_.currentBoundary,
+				   data_.nCompts * sizeof(CurrentStruct *) ) );
+	_( cudaMalloc( (void **) &data_.state,
+				   data_.stateSize * sizeof(double) ) );
+	_( cudaMalloc( (void **) &data_.caConc,
+				   data_.nCaPools * sizeof(CaConcStruct) ) );
+	_( cudaMalloc( (void **) &data_.ca,
+				   data_.nCaPools * sizeof(double) ) );
+	_( cudaMalloc( (void **) &data_.caActivation,
+				   data_.nCaPools * sizeof(double) ) );
+	_( cudaMalloc( (void **) &data_.caTarget,
+				   data_.nChannels * sizeof(double *) ) );
+	_( cudaMalloc( (void **) &data_.caCount,
+				   data_.nCompts * sizeof(unsigned int) ) );
+	_( cudaMalloc( (void **) &data_.column,
+				   data_.nChannels * sizeof(GpuLookupColumn) ) );
+	_( cudaMalloc( (void **) &data_.caRowCompt,
+				   data_.caRowComptSize * sizeof(GpuLookupRow) ) );
+	_( cudaMalloc( (void **) &data_.caRow,
+				   data_.nChannels * sizeof(GpuLookupRow *) ) );
+
+	// Copy data for HSolveActive fields
+	_( cudaMemcpy( data_.channel, &hsolve->channel_[0],
+				   data_.nChannels * sizeof(ChannelStruct),
+				   cudaMemcpyHostToDevice ) );
+	_( cudaMemcpy( data_.channelCount, &hsolve->channelCount_[0],
+				   data_.nCompts * sizeof(int),
+				   cudaMemcpyHostToDevice ) );
+	_( cudaMemcpy( data_.current, &hsolve->current_[0],
+				   data_.nChannels * sizeof(CurrentStruct),
+				   cudaMemcpyHostToDevice ) );
+	// currentBoundary needs to be dealt with separately.
+	_( cudaMemcpy( data_.state, &hsolve->state_[0],
+				   data_.stateSize * sizeof(double),
+				   cudaMemcpyHostToDevice ) );
+	_( cudaMemcpy( data_.caConc, &hsolve->caConc_[0],
+				   data_.nCaPools * sizeof(CaConcStruct),
+				   cudaMemcpyHostToDevice ) );
+	_( cudaMemcpy( data_.ca, &hsolve->ca_[0],
+				   data_.nCaPools * sizeof(double),
+				   cudaMemcpyHostToDevice ) );
+	_( cudaMemcpy( data_.caActivation, &hsolve->caActivation_[0],
+				   data_.nCaPools * sizeof(double),
+				   cudaMemcpyHostToDevice ) );
+	// caTarget has to be dealt with separately.
+	_( cudaMemcpy( data_.caCount, &hsolve->caCount_[0],
+				   data_.nCompts * sizeof(unsigned int),
+				   cudaMemcpyHostToDevice ) );
+	// Not too sure if this will work, because I am actually copying between
+	// two different kinds of data types.
+	_( cudaMemcpy( data_.column, &hsolve->column_[0],
+				   data_.nChannels * sizeof(GpuLookupColumn),
+				   cudaMemcpyHostToDevice ) );
+	// Need to take care of caRow here.
+
+	// First, let's take care of currentBoundary
+	int i;
+	CurrentStruct **currentBoundary = new CurrentStruct*[ data_.nCompts ];
+	currentBoundary[ 0 ] = data_.current + hsolve->channelCount_[ 0 ];
+	for ( i = 1 ; i < data_.nCompts ; ++i ) {
+		currentBoundary[i] = currentBoundary[ i-1 ] + hsolve->channelCount_[i];
+	}
+	_( cudaMemcpy( data_.currentBoundary, currentBoundary,
+				   data_.nCompts * sizeof(double *),
+				   cudaMemcpyHostToDevice ) );
+
+	// Now to take care of caTarget
+	double **caTarget = new double*[ data_.nChannels ];
+	for ( i = 0 ; i < data_.nChannels ; ++i ) {
+		caTarget[i] = data_.caActivation + (long)( hsolve->caTarget_[i] -
+												   &hsolve->caActivation_[0] );
+	}
+	_( cudaMemcpy( data_.caTarget, caTarget,
+				   data_.nChannels * sizeof(double *),
+				   cudaMemcpyHostToDevice ) );
+
+	// And finally for caRow and caRowCompt
+	GpuLookupRow **caRow = new GpuLookupRow*[ data_.nChannels ];
+	int j = 0;
+	for ( i = 0 ; i < data_.nChannels ; ++i ) {
+		if ( hsolve->channel_[i].Zpower_ > 0.0 ) {
+			if ( hsolve->caRow_[j] == 0 )
+				caRow[j] = 0;
+			else
+				caRow[j] = data_.caRowCompt + (long)(hsolve->caRow_[j] -
+													 &hsolve->caRowCompt_[0]);
+			++j;
+		}
+	}
+	_( cudaMemcpy( data_.caRow, caRow,
+				   data_.nChannels * sizeof(GpuLookupRow *),
+				   cudaMemcpyHostToDevice ) );
+
+	// Copy the lookup tables
+	data_.vTable = GpuLookupTable::GpuLookupTable( hsolve->vTable_ );
+	data_.caTable = GpuLookupTable::GpuLookupTable( hsolve->caTable_ );
+
+	// Constants
+	_( cudaMemcpyToSymbol( &INSTANT_X, &hsolve->INSTANT_X, sizeof(int),
+						   cudaMemcpyHostToDevice ) );
+	_( cudaMemcpyToSymbol( &INSTANT_Y, &hsolve->INSTANT_Y, sizeof(int),
+						   cudaMemcpyHostToDevice ) );
+	_( cudaMemcpyToSymbol( &INSTANT_Z, &hsolve->INSTANT_Z, sizeof(int),
+						   cudaMemcpyHostToDevice ) );
 
 	// Need to decide how many blocks and threads to use per HSolve object
 	// For now, keep each hsolver on its own thread.
@@ -360,7 +508,7 @@ void GpuInterface::gpuCalculateChannelCurrents()
 	dim3 numBlocks(numBlocks_);
 	dim3 numThreads(numThreads_);
 
-	calculateChannelCurrentsKernel( data_ );
+	calculateChannelCurrentsKernel<<< numBlocks, numThreads >>>( data_ );
 }
 
 void GpuInterface::gpuAdvanceCalcium()
@@ -368,7 +516,7 @@ void GpuInterface::gpuAdvanceCalcium()
 	dim3 numBlocks(numBlocks_);
 	dim3 numThreads(numThreads_);
 
-	advanceCalciumKernel( data_ );
+	advanceCalciumKernel<<< numBlocks, numThreads >>>( data_ );
 }
 
 #ifdef DO_UNIT_TESTS

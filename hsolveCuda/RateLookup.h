@@ -55,7 +55,7 @@ public:
 		double& C1,
 		double& C2 );
 	
-private:
+//private:
 	//~ vector< bool >       interpolate_;
 	vector< double >     table_;
 	double               min_;
