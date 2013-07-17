@@ -28,7 +28,10 @@ OBJ = \
 	ZombieCompartment.o \
 	ZombieCaConc.o \
 	ZombieHHChannel.o \
-	testGpuInterface.o \
+
+ifeq ($(BUILD),debug)
+OBJ += testGpuInterface.o
+endif
 
 HEADERS = \
 	../basecode/header.h

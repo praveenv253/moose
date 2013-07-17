@@ -1,3 +1,5 @@
+#ifdef DO_UNIT_TESTS
+
 #include "cudaLibrary/GpuInterface.h"
 #include "../shell/Shell.h"
 
@@ -25,7 +27,7 @@ void testGpuInterface()
 	ASSERT( hsolve->VMid_ == gpu.hsolve_->VMid, "Gpu Interface, VMid" );
 #endif
 
-	cout << "\nTesting GpuInterface\n" << flush;
+	cout << endl << "Testing GpuInterface: " << flush;
 
 	Shell* shell = reinterpret_cast< Shell* >( Id().eref().data() );
 
@@ -269,7 +271,7 @@ void testGpuInterface()
 	int* array;
 	unsigned int arraySize;
 	for ( int cell = childArray.size()-1; cell >= 0; cell-- ) {
-		cout << "Cell number: " << cell << endl;
+		//cout << "Cell number: " << cell << endl;
 
 		array = childArray[ cell ];
 		arraySize = childArraySize[ cell ];
@@ -282,7 +284,7 @@ void testGpuInterface()
 		tree.resize( nCompt );
 		Em.clear();
 		V.clear();
-		cout << "First for loop" << endl;
+		//cout << "First for loop" << endl;
 		for ( i = 0; i < nCompt; i++ ) {
 			tree[ i ].Ra = 15.0 + 3.0 * i;
 			tree[ i ].Rm = 45.0 + 15.0 * i;
@@ -292,7 +294,7 @@ void testGpuInterface()
 		}
 
 		int count = -1;
-		cout << "Second for loop; arraysize=" << arraySize << endl;
+		//cout << "Second for loop; arraysize=" << arraySize << endl;
 		for ( unsigned int a = 0; a < arraySize; a++ ) {
 			if ( array[ a ] == -1 )
 				count++;
@@ -303,11 +305,11 @@ void testGpuInterface()
 		//////////////////////////////////////////
 		// Create cell inside moose; setup solver.
 		//////////////////////////////////////////
-		cout << "Creating id" << endl;
+		//cout << "Creating id" << endl;
 		Id n = shell->doCreate( "Neutral", Id(), "n" );
 
 		vector< Id > c( nCompt );
-		cout << "Third for loop" << endl;
+		//cout << "Third for loop" << endl;
 		for ( i = 0; i < nCompt; i++ ) {
 			ostringstream name;
 			name << "c" << i;
@@ -321,7 +323,7 @@ void testGpuInterface()
 			Field< double >::set( c[ i ], "Vm", V[ i ] );
 		}
 
-		cout << "Fourth for loop" << endl;
+		//cout << "Fourth for loop" << endl;
 		for ( i = 0; i < nCompt; i++ ) {
 			vector< unsigned int >& child = tree[ i ].children;
 			for ( j = 0; j < ( int )( child.size() ); j++ ) {
@@ -334,14 +336,20 @@ void testGpuInterface()
 		hsolve->HSolvePassive::setup( c[ 0 ], dt );
 		HSolve hsolve_copy = *hsolve;
 
-		cout << "Starting setup" << endl;
+		//cout << "Starting setup" << endl;
 		GpuInterface gpu( &hsolve_copy );
-		cout << "Starting unsetup" << endl;
+		//cout << "Starting unsetup" << endl;
 		gpu.unsetup();
-		cout << "Asserting..." << endl;
+		//cout << "Asserting..." << endl;
 		ASSERT( hsolve_copy == *hsolve, "GpuInterface setup error" );
 
 		// cleanup
 		shell->doDelete( n );
+
+		cout << ".";
 	}
+
+	cout << endl;
 }
+
+#endif // DO_UNIT_TESTS
