@@ -10,10 +10,10 @@ void testHSonly()
 
 	// First create a test matrix.
 	const int n = 4;				// Start with a 3x3 matrix
-	double testHS[] = {	1, 1, 0, 2,
-						1, 1, 0, 3,
-						1, 1, 0, 3,
-						1, 0, 0, 2 };	// Equivalent of HS => tridiagonal
+	double testHS[] = {	1, 0, 0, 1,
+						1, 0, 0, 2,
+						1, 0, 0, 3,
+						1, 0, 0, 4 };	// Equivalent of HS => tridiagonal
 	double V[] = { 0, 0, 0 };
 	double VMid[] = { 0, 0, 0 };
 
@@ -44,7 +44,7 @@ void testHSonly()
 	dim3 numThreads(1);
 	cudaStream_t stream;
 	cudaStreamCreate( &stream );
-	forwardEliminateKernel<<< numBlocks, numThreads, 0, stream >>>(d);
+	forwardEliminateKernel<<< numBlocks, numThreads >>>(d);
 
 	// Check the matrix after forward eliminate
 	cudaMemcpy( testHS, d.HS, 4 * n * sizeof(double), cudaMemcpyDeviceToHost );
@@ -56,7 +56,7 @@ void testHSonly()
 			std::cout << std::endl;
 	}
 
-	backwardSubstituteKernel<<< numBlocks, numThreads, 0, stream  >>>(d);
+	backwardSubstituteKernel<<< numBlocks, numThreads >>>(d);
 
 	// Copy results back into CPU
 	cudaMemcpy( V, d.V, n * sizeof(double), cudaMemcpyDeviceToHost );
@@ -164,7 +164,7 @@ void testYcompt()
 	}
 	std::cout << endl;
 
-	backwardSubstituteKernel<<< numBlocks, numThreads, 0, stream  >>>(d);
+	backwardSubstituteKernel<<< numBlocks, numThreads, 0, stream >>>(d);
 
 	// Copy results back into CPU
 	cudaMemcpy( V, d.V, n * sizeof(double), cudaMemcpyDeviceToHost );
@@ -323,7 +323,7 @@ void testRank3()
 	}
 	std::cout << endl;
 
-	backwardSubstituteKernel<<< numBlocks, numThreads, 0, stream  >>>(d);
+	backwardSubstituteKernel<<< numBlocks, numThreads, 0, stream >>>(d);
 
 	// Copy results back into CPU
 	cudaMemcpy( V, d.V, n * sizeof(double), cudaMemcpyDeviceToHost );
@@ -342,8 +342,8 @@ void testRank3()
 
 int main()
 {
-	//testHSonly();
-	//testYcompt();
+	testHSonly();
+	testYcompt();
 	testRank3();
 	return 0;
 }

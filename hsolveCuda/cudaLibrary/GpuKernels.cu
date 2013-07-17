@@ -55,10 +55,12 @@ __global__ void forwardEliminateKernel(GpuDataStruct ds) {
 	double **iop = ds.operand;
 	JunctionStruct *junction;
 	
-	for( int x = 0 ; x < 36 ; x++ ) {		//XXX debugging only
-		printf( "%p ", *(iop + x) );
+	if ( iop ) {
+		for( int x = 0 ; x < 36 ; x++ ) {		//XXX debugging only
+			printf( "%p ", *(iop + x) );
+		}
+		printf("\n");
 	}
-	printf("\n");
 	
 	double pivot;
 	double division;

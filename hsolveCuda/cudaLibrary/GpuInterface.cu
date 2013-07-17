@@ -26,7 +26,7 @@
 	} 																		\
 }
 
-/** 
+/**
  * Constructor for the GpuInterface class.
  * Allocates memory for all data elements in the GPU. Transfers data from CPU
  * to GPU.
@@ -41,38 +41,63 @@ GpuInterface::GpuInterface(HSolve *hsolve)
 	data_.HJSize = hsolve->HJ_.size();
 	data_.junctionSize = hsolve->junction_.size();
 
-	// Allocate memory for array-of-double data members
-	_( cudaMalloc( (void **) &data_.HS, 4 * data_.nCompts * sizeof(double) ) );
-	_( cudaMalloc( (void **) &data_.HJ, data_.HJSize * sizeof(double) ) );
-	_( cudaMalloc( (void **) &data_.V, data_.nCompts * sizeof(double) ) );
-	_( cudaMalloc( (void **) &data_.VMid, data_.nCompts * sizeof(double) ) );
-	_( cudaMalloc( (void **) &data_.HJCopy, data_.HJSize * sizeof(double) ) );
+	// Allocate memory for data members
+	if ( data_.nCompts > 0 ) {
+		_( cudaMalloc((void **) &data_.HS, 4* data_.nCompts* sizeof(double)) );
+		_( cudaMalloc((void **) &data_.V, data_.nCompts * sizeof(double)) );
+		_( cudaMalloc((void **) &data_.VMid, data_.nCompts * sizeof(double)) );
+		_( cudaMalloc((void **) &data_.compartment,
+					  data_.nCompts * sizeof(CompartmentStruct)) );
+	} else {
+		data_.HS = NULL;
+		data_.V = NULL;
+		data_.VMid = NULL;
+		data_.compartment = NULL;
+	}
+	if ( data_.HJSize > 0 ) {
+		_( cudaMalloc((void **) &data_.HJ, data_.HJSize * sizeof(double)) );
+		_( cudaMalloc((void **) &data_.HJCopy, data_.HJSize* sizeof(double)) );
+	} else {
+		data_.HJ = NULL;
+		data_.HJCopy = NULL;
+	}
+	if ( data_.junctionSize > 0 ) {
+		_( cudaMalloc( (void **) &data_.junction,
+					   data_.junctionSize * sizeof(JunctionStruct) ) );
+	} else {
+		data_.junction = NULL;
+	}
 
 	// Copy array-of-double data into GPU
-	_( cudaMemcpy( data_.HS, &hsolve->HS_[0], 4* data_.nCompts* sizeof(double),
-				   cudaMemcpyHostToDevice ) );
-	_( cudaMemcpy( data_.HJ, &hsolve->HJ_[0], data_.HJSize * sizeof(double),
-				   cudaMemcpyHostToDevice ) );
-	_( cudaMemcpy( data_.V, &hsolve->V_[0], data_.nCompts * sizeof(double),
-				   cudaMemcpyHostToDevice ) );
-	_( cudaMemcpy( data_.VMid, &hsolve->VMid_[0], data_.nCompts*sizeof(double),
-				   cudaMemcpyHostToDevice ) );
-	_( cudaMemcpy( data_.HJCopy, &hsolve->HJCopy_[0],
-				   data_.HJSize * sizeof(double), cudaMemcpyHostToDevice ) );
-
-	// Allocate memory for array-of-structure data members
-	_( cudaMalloc( (void **) &data_.compartment,
-				   data_.nCompts * sizeof(CompartmentStruct) ) );
-	_( cudaMalloc( (void **) &data_.junction,
-				   data_.junctionSize * sizeof(JunctionStruct) ) );
-
+	if ( data_.HS )
+		_( cudaMemcpy( data_.HS, &hsolve->HS_[0],
+					   4 * data_.nCompts * sizeof(double),
+					   cudaMemcpyHostToDevice ) );
+	if ( data_.V )
+		_( cudaMemcpy( data_.V, &hsolve->V_[0],
+					   data_.nCompts * sizeof(double),
+					   cudaMemcpyHostToDevice ) );
+	if ( data_.VMid )
+		_( cudaMemcpy( data_.VMid, &hsolve->VMid_[0],
+					   data_.nCompts * sizeof(double),
+					   cudaMemcpyHostToDevice ) );
+	if ( data_.HJ )
+		_( cudaMemcpy( data_.HJ, &hsolve->HJ_[0],
+					   data_.HJSize * sizeof(double),
+					   cudaMemcpyHostToDevice ) );
+	if ( data_.HJCopy )
+		_( cudaMemcpy( data_.HJCopy, &hsolve->HJCopy_[0],
+					   data_.HJSize * sizeof(double),
+					   cudaMemcpyHostToDevice ) );
 	// Copy data for array-of-struct data members
-	_( cudaMemcpy( data_.compartment, &hsolve->compartment_[0],
-				   data_.nCompts * sizeof(CompartmentStruct),
-				   cudaMemcpyHostToDevice ) );
-	_( cudaMemcpy( data_.junction, &hsolve->junction_[0],
-				   data_.junctionSize * sizeof(JunctionStruct),
-				   cudaMemcpyHostToDevice ) );
+	if ( data_.compartment )
+		_( cudaMemcpy( data_.compartment, &hsolve->compartment_[0],
+					   data_.nCompts * sizeof(CompartmentStruct),
+					   cudaMemcpyHostToDevice ) );
+	if ( data_.junction )
+		_( cudaMemcpy( data_.junction, &hsolve->junction_[0],
+					   data_.junctionSize * sizeof(JunctionStruct),
+					   cudaMemcpyHostToDevice ) );
 
 	// Call to take care of populating GpuInterface::operand_ and
 	// GpuInterface::backOperand_.
@@ -82,15 +107,25 @@ GpuInterface::GpuInterface(HSolve *hsolve)
 	data_.operandSize = operand_.size();
 	data_.backOperandSize = backOperand_.size();
 
-	_( cudaMalloc((void**)&data_.operand, operand_.size() * sizeof(double*)) );
-	_( cudaMemcpy(data_.operand, &operand_[ 0 ],
-				  operand_.size() * sizeof(double*), cudaMemcpyHostToDevice) );
+	if ( data_.operandSize > 0 ) {
+		_( cudaMalloc( (void**)&data_.operand,
+					   operand_.size() * sizeof(double*) ) );
+		_( cudaMemcpy( data_.operand, &operand_[ 0 ],
+					   operand_.size() * sizeof(double*),
+					   cudaMemcpyHostToDevice ) );
+	} else {
+		data_.operand = NULL;
+	}
 
-	_( cudaMalloc((void**)&data_.backOperand,
-				  backOperand_.size() * sizeof(double*)) );
-	_( cudaMemcpy(data_.backOperand, &backOperand_[ 0 ],
-				  backOperand_.size() * sizeof(double*),
-				  cudaMemcpyHostToDevice) );
+	if ( data_.backOperandSize > 0 ) {
+		_( cudaMalloc((void**)&data_.backOperand,
+					  backOperand_.size() * sizeof(double*)) );
+		_( cudaMemcpy(data_.backOperand, &backOperand_[ 0 ],
+					  backOperand_.size() * sizeof(double*),
+					  cudaMemcpyHostToDevice) );
+	} else {
+		data_.backOperand = NULL;
+	}
 
 	// Need to decide how many blocks and threads to use per HSolve object
 	// For now, keep each hsolver on its own thread.
@@ -136,20 +171,20 @@ void GpuInterface::makeOperands(HSolve *hsolve)
 			
 			// Select last member.
 			farIndex = group[ group.size() - 1 ];
-			operand_.push_back( &data_.HS[ 0 ] + 4 * farIndex );
-			operand_.push_back( &data_.VMid[ 0 ] + farIndex );
+			operand_.push_back( data_.HS + 4 * farIndex );
+			operand_.push_back( data_.VMid + farIndex );
 		} else if ( rank == 2 ) {
 			operand_.push_back( base );
 			
 			// Select 2nd last member.
 			farIndex = group[ group.size() - 2 ];
-			operand_.push_back( &data_.HS[ 0 ] + 4 * farIndex );
-			operand_.push_back( &data_.VMid[ 0 ] + farIndex );
+			operand_.push_back( data_.HS + 4 * farIndex );
+			operand_.push_back( data_.VMid + farIndex );
 			
 			// Select last member.
 			farIndex = group[ group.size() - 1 ];
-			operand_.push_back( &data_.HS[ 0 ] + 4 * farIndex );
-			operand_.push_back( &data_.VMid[ 0 ] + farIndex );
+			operand_.push_back( data_.HS + 4 * farIndex );
+			operand_.push_back( data_.VMid + farIndex );
 		} else {
 			// Operations on diagonal elements and elements from B
 			// (as in Ax = B).
@@ -158,13 +193,13 @@ void GpuInterface::makeOperands(HSolve *hsolve)
 				farIndex = group[ start + j ];
 				
 				// Diagonal elements
-				operand_.push_back( &data_.HS [ 0 ] + 4 * farIndex );
+				operand_.push_back( data_.HS + 4 * farIndex );
 				operand_.push_back( base + 2 * j );
 				operand_.push_back( base + 2 * j + 1 );
 				
 				// Elements from B
-				operand_.push_back( &data_.HS[ 0 ] + 4 * farIndex + 3 );
-				operand_.push_back( &data_.HS[ 0 ] + 4 * index + 3 );
+				operand_.push_back( data_.HS + 4 * farIndex + 3 );
+				operand_.push_back( data_.HS + 4 * index + 3 );
 				operand_.push_back( base + 2 * j + 1 );
 			}
 			
@@ -237,7 +272,7 @@ void GpuInterface::makeOperands(HSolve *hsolve)
 			farIndex = group[ start + j ];
 			
 			backOperand_.push_back( base + 2 * j );
-			backOperand_.push_back( &data_.VMid[ 0 ] + farIndex );
+			backOperand_.push_back( data_.VMid + farIndex );
 		}
 	}
 }
