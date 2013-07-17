@@ -172,22 +172,15 @@ void Qinfo::readQ( ThreadId threadNum )
  */
 void Qinfo::buildOn( bool qFlag )
 {
-	//cout << "Entering buildOn" << endl;
 	if ( qFlag ) {
-		//cout << "qflag is true" << endl;
-		if ( isSafeForStructuralOps_ ) {
-			//cout << "isSafeForStructuralOps_ is also true" << endl;
+		if ( isSafeForStructuralOps_ )
 			return;
-		}
 		else
 			assert( 0 );
 	} else {
-		//cout << "qflag is false" << endl;
 		parserPending_ = true;
-		//cout << "Attempting to acquire mutexes" << endl;
 		pthread_mutex_lock( pMutex_ );
 		pthread_mutex_lock( qMutex_ );
-		//cout << "Done acquiring mutexes" << endl;
 		return;
 	}
 }

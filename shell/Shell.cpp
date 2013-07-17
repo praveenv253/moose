@@ -504,23 +504,17 @@ void Shell::setShellElement( Element* shelle )
  */
 Id Shell::doCreate( string type, Id parent, string name, vector< int > dimensions, bool isGlobal, bool qFlag )
 {
-	cout << "Creating..." << endl;
 	Id ret = Id::nextId();
-	cout << "Done with Id::nextId" << endl;
 	vector< int > dims( dimensions );
 	dims.push_back( isGlobal );
-	cout << "Switching on Qinfo::buildOn" << endl;
 	Qinfo::buildOn( qFlag );
-	cout << "Before inner create" << endl;
 		innerCreate( type, parent, ret, name, dims );
-	cout << "After inner create" << endl;
 	Qinfo::buildOff( qFlag );
 	/*
 	initAck(); // Nasty thread stuff happens here for multithread mode.
 		requestCreate()->send( Id().eref(), ScriptThreadNum, type, parent, ret, name, dims );
 	waitForAck();
 	*/
-	cout << "Done creating" << endl;
 	return ret;
 }
 
