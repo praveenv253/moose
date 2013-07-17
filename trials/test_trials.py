@@ -20,7 +20,7 @@ moose.useClock(0, s.path, 'process')
 # once before starting
 moose.reinit()
 # This will run the simulation for 5 seconds => 5 time steps.
-moose.start(1)
+moose.start(5)
 
 # Expected output is:
 # 10
