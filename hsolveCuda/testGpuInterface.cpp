@@ -1,5 +1,5 @@
 #include "cudaLibrary/GpuInterface.h"
-//#include "../shell/Shell.h"
+#include "../shell/Shell.h"
 
 #include "testGpuInterface.h"
 
@@ -8,6 +8,7 @@
  */
 void testGpuInterface()
 {
+#if 0
 	HSolve *hsolve = new HSolve;
 	hsolve->nCompt_ = 0;
 	hsolve->stage_ = 0;
@@ -22,8 +23,8 @@ void testGpuInterface()
 	ASSERT( hsolve->HJCopy_ == gpu.hsolve_->HJCopy, "Gpu Interface, HJCopy" );
 	ASSERT( hsolve->V_ == gpu.hsolve_->V, "Gpu Interface, V" );
 	ASSERT( hsolve->VMid_ == gpu.hsolve_->VMid, "Gpu Interface, VMid" );
+#endif
 
-#if 0
 	cout << "\nTesting GpuInterface\n" << flush;
 
 	Shell* shell = reinterpret_cast< Shell* >( Id().eref().data() );
@@ -246,7 +247,7 @@ void testGpuInterface()
 	/*
 	 * Solver instance.
 	 */
-	HSolve *hsolve;
+	HSolve *hsolve = new HSolve;
 
 	/*
 	 * Model details.
@@ -267,7 +268,9 @@ void testGpuInterface()
 	int nCompt;
 	int* array;
 	unsigned int arraySize;
-	for ( unsigned int cell = 0; cell < childArray.size(); cell++ ) {
+	for ( int cell = childArray.size()-1; cell >= 0; cell-- ) {
+		cout << "Cell number: " << cell << endl;
+
 		array = childArray[ cell ];
 		arraySize = childArraySize[ cell ];
 		nCompt = count( array, array + arraySize, -1 );
@@ -279,6 +282,7 @@ void testGpuInterface()
 		tree.resize( nCompt );
 		Em.clear();
 		V.clear();
+		cout << "First for loop" << endl;
 		for ( i = 0; i < nCompt; i++ ) {
 			tree[ i ].Ra = 15.0 + 3.0 * i;
 			tree[ i ].Rm = 45.0 + 15.0 * i;
@@ -288,18 +292,22 @@ void testGpuInterface()
 		}
 
 		int count = -1;
-		for ( unsigned int a = 0; a < arraySize; a++ )
+		cout << "Second for loop; arraysize=" << arraySize << endl;
+		for ( unsigned int a = 0; a < arraySize; a++ ) {
 			if ( array[ a ] == -1 )
 				count++;
 			else
 				tree[ count ].children.push_back( array[ a ] );
+		}
 
 		//////////////////////////////////////////
 		// Create cell inside moose; setup solver.
 		//////////////////////////////////////////
+		cout << "Creating id" << endl;
 		Id n = shell->doCreate( "Neutral", Id(), "n" );
 
 		vector< Id > c( nCompt );
+		cout << "Third for loop" << endl;
 		for ( i = 0; i < nCompt; i++ ) {
 			ostringstream name;
 			name << "c" << i;
@@ -313,6 +321,7 @@ void testGpuInterface()
 			Field< double >::set( c[ i ], "Vm", V[ i ] );
 		}
 
+		cout << "Fourth for loop" << endl;
 		for ( i = 0; i < nCompt; i++ ) {
 			vector< unsigned int >& child = tree[ i ].children;
 			for ( j = 0; j < ( int )( child.size() ); j++ ) {
@@ -325,14 +334,16 @@ void testGpuInterface()
 		hsolve->HSolvePassive::setup( c[ 0 ], dt );
 		HSolve hsolve_copy = *hsolve;
 
+		cout << "Starting setup" << endl;
 		GpuInterface gpu( &hsolve_copy );
+		cout << "Starting unsetup" << endl;
 		gpu.unsetup();
+		cout << "Asserting..." << endl;
 		ASSERT( hsolve_copy == *hsolve, "GpuInterface setup error" );
 
 		// cleanup
 		shell->doDelete( n );
 	}
-#endif
 }
 
 #if 0

@@ -462,6 +462,19 @@ void HSolve::deleteIncomingMessages( Element * orig, const string finfo)
     }
 }
 
+bool HSolve::operator==( HSolve other )
+{
+	bool ret = true;
+
+	ret &= ( HS_ == other.HS_ );
+	ret &= ( HJ_ == other.HJ_ );
+	ret &= ( HJCopy_ == other.HJCopy_ );
+	ret &= ( V_ == other.V_ );
+	ret &= ( VMid_ == other.VMid_ );
+
+	return ret;
+}
+
 #if 0
 
 /// crate test object and push it into the container vector
