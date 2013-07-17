@@ -1,0 +1,365 @@
+#include "cudaLibrary/GpuInterface.h"
+#include "../shell/Shell.h"
+
+#include "testGpuInterface.h"
+
+/**
+ * This program simply tests whether setup and unsetup are working correctly.
+ */
+void testGpuInterface()
+{
+	cout << "\nTesting GpuInterface\n" << flush;
+
+	Shell* shell = reinterpret_cast< Shell* >( Id().eref().data() );
+
+	vector< int* > childArray;
+	vector< unsigned int > childArraySize;
+
+	/**
+	 *  We test passive-cable solver for the following cell:
+	 *
+	 *   Soma--->  15 - 14 - 13 - 12
+	 *              |    |
+	 *              |    L 11 - 10
+	 *              |
+	 *              L 16 - 17 - 18 - 19
+	 *                      |
+	 *                      L 9 - 8 - 7 - 6 - 5
+	 *                      |         |
+	 *                      |         L 4 - 3
+	 *                      |
+	 *                      L 2 - 1 - 0
+	 *
+	 *  The numbers are the hines indices of compartments. Compartment X is the
+	 *  child of compartment Y if X is one level further away from the soma (#15)
+	 *  than Y. So #17 is the parent of #'s 2, 9 and 18.
+	 */
+
+	int childArray_1[ ] =
+	{
+		/* c0  */  -1,
+		/* c1  */  -1, 0,
+		/* c2  */  -1, 1,
+		/* c3  */  -1,
+		/* c4  */  -1, 3,
+		/* c5  */  -1,
+		/* c6  */  -1, 5,
+		/* c7  */  -1, 4, 6,
+		/* c8  */  -1, 7,
+		/* c9  */  -1, 8,
+		/* c10 */  -1,
+		/* c11 */  -1, 10,
+		/* c12 */  -1,
+		/* c13 */  -1, 12,
+		/* c14 */  -1, 11, 13,
+		/* c15 */  -1, 14, 16,
+		/* c16 */  -1, 17,
+		/* c17 */  -1, 2, 9, 18,
+		/* c18 */  -1, 19,
+		/* c19 */  -1,
+	};
+
+	childArray.push_back( childArray_1 );
+	childArraySize.push_back( sizeof( childArray_1 ) / sizeof( int ) );
+
+	/**
+	 *  Cell 2:
+	 *
+	 *             3
+	 *             |
+	 *   Soma--->  2
+	 *            / \
+	 *           /   \
+	 *          1     0
+	 *
+	 */
+
+	int childArray_2[ ] =
+	{
+		/* c0  */  -1,
+		/* c1  */  -1,
+		/* c2  */  -1, 0, 1, 3,
+		/* c3  */  -1,
+	};
+
+	childArray.push_back( childArray_2 );
+	childArraySize.push_back( sizeof( childArray_2 ) / sizeof( int ) );
+
+	/**
+	 *  Cell 3:
+	 *
+	 *             3
+	 *             |
+	 *             2
+	 *            / \
+	 *           /   \
+	 *          1     0  <--- Soma
+	 *
+	 */
+
+	int childArray_3[ ] =
+	{
+		/* c0  */  -1, 2,
+		/* c1  */  -1,
+		/* c2  */  -1, 1, 3,
+		/* c3  */  -1,
+	};
+
+	childArray.push_back( childArray_3 );
+	childArraySize.push_back( sizeof( childArray_3 ) / sizeof( int ) );
+
+	/**
+	 *  Cell 4:
+	 *
+	 *             3  <--- Soma
+	 *             |
+	 *             2
+	 *            / \
+	 *           /   \
+	 *          1     0
+	 *
+	 */
+
+	int childArray_4[ ] =
+	{
+		/* c0  */  -1,
+		/* c1  */  -1,
+		/* c2  */  -1, 0, 1,
+		/* c3  */  -1, 2,
+	};
+
+	childArray.push_back( childArray_4 );
+	childArraySize.push_back( sizeof( childArray_4 ) / sizeof( int ) );
+
+	/**
+	 *  Cell 5:
+	 *
+	 *             1  <--- Soma
+	 *             |
+	 *             2
+	 *            / \
+	 *           4   0
+	 *          / \
+	 *         3   5
+	 *
+	 */
+
+	int childArray_5[ ] =
+	{
+		/* c0  */  -1,
+		/* c1  */  -1, 2,
+		/* c2  */  -1, 0, 4,
+		/* c3  */  -1,
+		/* c4  */  -1, 3, 5,
+		/* c5  */  -1,
+	};
+
+	childArray.push_back( childArray_5 );
+	childArraySize.push_back( sizeof( childArray_5 ) / sizeof( int ) );
+
+	/**
+	 *  Cell 6:
+	 *
+	 *             3  <--- Soma
+	 *             L 4
+	 *               L 6
+	 *               L 5
+	 *               L 2
+	 *               L 1
+	 *               L 0
+	 *
+	 */
+
+	int childArray_6[ ] =
+	{
+		/* c0  */  -1,
+		/* c1  */  -1,
+		/* c2  */  -1,
+		/* c3  */  -1, 4,
+		/* c4  */  -1, 0, 1, 2, 5, 6,
+		/* c5  */  -1,
+		/* c6  */  -1,
+	};
+
+	childArray.push_back( childArray_6 );
+	childArraySize.push_back( sizeof( childArray_6 ) / sizeof( int ) );
+
+	/**
+	 *  Cell 7: Single compartment
+	 */
+
+	int childArray_7[ ] =
+	{
+		/* c0  */  -1,
+	};
+
+	childArray.push_back( childArray_7 );
+	childArraySize.push_back( sizeof( childArray_7 ) / sizeof( int ) );
+
+	/**
+	 *  Cell 8: 3 compartments; soma is in the middle.
+	 */
+
+	int childArray_8[ ] =
+	{
+		/* c0  */  -1,
+		/* c1  */  -1, 0, 2,
+		/* c2  */  -1,
+	};
+
+	childArray.push_back( childArray_8 );
+	childArraySize.push_back( sizeof( childArray_8 ) / sizeof( int ) );
+
+	/**
+	 *  Cell 9: 3 compartments; first compartment is soma.
+	 */
+
+	int childArray_9[ ] =
+	{
+		/* c0  */  -1, 1,
+		/* c1  */  -1, 2,
+		/* c2  */  -1,
+	};
+
+	childArray.push_back( childArray_9 );
+	childArraySize.push_back( sizeof( childArray_9 ) / sizeof( int ) );
+
+	////////////////////////////////////////////////////////////////////////////
+	// Run tests
+	////////////////////////////////////////////////////////////////////////////
+	/*
+	 * Solver instance.
+	 */
+	HSolve *hsolve;
+
+	/*
+	 * Model details.
+	 */
+	double dt = 1.0;
+	vector< TreeNodeStruct > tree;
+	vector< double > Em;
+	vector< double > B;
+	vector< double > V;
+	vector< double > VMid;
+
+	/*
+	 * Loop over cells.
+	 */
+	int i;
+	int j;
+	//~ bool success;
+	int nCompt;
+	int* array;
+	unsigned int arraySize;
+	for ( unsigned int cell = 0; cell < childArray.size(); cell++ ) {
+		array = childArray[ cell ];
+		arraySize = childArraySize[ cell ];
+		nCompt = count( array, array + arraySize, -1 );
+
+		//////////////////////////////////////////
+		// Prepare local information on cell
+		//////////////////////////////////////////
+		tree.clear();
+		tree.resize( nCompt );
+		Em.clear();
+		V.clear();
+		for ( i = 0; i < nCompt; i++ ) {
+			tree[ i ].Ra = 15.0 + 3.0 * i;
+			tree[ i ].Rm = 45.0 + 15.0 * i;
+			tree[ i ].Cm = 500.0 + 200.0 * i * i;
+			Em.push_back( -0.06 );
+			V.push_back( -0.06 + 0.01 * i );
+		}
+
+		int count = -1;
+		for ( unsigned int a = 0; a < arraySize; a++ )
+			if ( array[ a ] == -1 )
+				count++;
+			else
+				tree[ count ].children.push_back( array[ a ] );
+
+		//////////////////////////////////////////
+		// Create cell inside moose; setup solver.
+		//////////////////////////////////////////
+		Id n = shell->doCreate( "Neutral", Id(), "n" );
+
+		vector< Id > c( nCompt );
+		for ( i = 0; i < nCompt; i++ ) {
+			ostringstream name;
+			name << "c" << i;
+			c[ i ] = shell->doCreate( "Compartment", n, name.str() );
+
+			Field< double >::set( c[ i ], "Ra", tree[ i ].Ra );
+			Field< double >::set( c[ i ], "Rm", tree[ i ].Rm );
+			Field< double >::set( c[ i ], "Cm", tree[ i ].Cm );
+			Field< double >::set( c[ i ], "Em", Em[ i ] );
+			Field< double >::set( c[ i ], "initVm", V[ i ] );
+			Field< double >::set( c[ i ], "Vm", V[ i ] );
+		}
+
+		for ( i = 0; i < nCompt; i++ ) {
+			vector< unsigned int >& child = tree[ i ].children;
+			for ( j = 0; j < ( int )( child.size() ); j++ ) {
+				MsgId mid = shell->doAddMsg(
+						"Single", c[ i ], "axial", c[ child[ j ] ], "raxial" );
+				ASSERT( mid != Msg::bad, "Creating test model" );
+			}
+		}
+
+		hsolve->HSolvePassive::setup( c[ 0 ], dt );
+		HSolve hsolve_copy = *hsolve;
+
+		GpuInterface gpu( &hsolve_copy );
+		gpu.unsetup();
+		ASSERT( hsolve_copy == *hsolve, "GpuInterface setup error" );
+
+		// cleanup
+		shell->doDelete( n );
+	}
+}
+
+unsigned int getNumCores()
+{
+	unsigned int numCPU = 0;
+#ifdef WIN_32
+	SYSTEM_INFO sysinfo;
+	GetSystemInfo( &sysinfo );
+
+	numCPU = sysinfo.dwNumberOfProcessors;
+#endif
+
+#ifdef LINUX
+	numCPU = sysconf( _SC_NPROCESSORS_ONLN );
+#endif
+
+#ifdef MACOSX
+	int mib[4];
+	size_t len = sizeof(numCPU); 
+
+	/* set the mib for hw.ncpu */
+	mib[0] = CTL_HW;
+	mib[1] = HW_AVAILCPU;  // alternatively, try HW_NCPU;
+
+	/* get the number of CPUs from the system */
+	sysctl(mib, 2, &numCPU, &len, NULL, 0);
+
+	if( numCPU < 1 ) 
+	{
+		mib[1] = HW_NCPU;
+		sysctl( mib, 2, &numCPU, &len, NULL, 0 );
+	}
+#endif
+	if ( numCPU < 1 )
+	{
+		cout << "No CPU information available. Assuming single core." << endl;
+		numCPU = 1;
+	}
+	return numCPU;
+}
+
+int main()
+{
+	testGpuInterface();
+	return 0;
+}
+

@@ -20,6 +20,7 @@
 class HSolve: public HSolveActive
 {
 	friend class GpuInterface;
+	friend void testGpuInterface();
 
 public:
 	HSolve();

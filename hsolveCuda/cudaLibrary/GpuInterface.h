@@ -17,6 +17,7 @@
 #include "../HSolvePassive.h"
 #include "../HSolveActive.h"
 #include "../HSolve.h"						// For HSolve
+#include "../testGpuInterface.h"			// For testing this class
 
 /** Structure to store data that is to be transferred to the GPU */
 struct GpuDataStruct {
@@ -44,6 +45,8 @@ struct GpuDataStruct {
  * with the GPU.
  */
 class GpuInterface {
+	friend void testGpuInterface();
+
 	protected:
 		unsigned int numBlocks_;
 		unsigned int numThreads_;
