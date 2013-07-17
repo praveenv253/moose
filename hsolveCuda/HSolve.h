@@ -20,6 +20,7 @@
 class HSolve: public HSolveActive
 {
 	friend class GpuInterface;
+	friend void testGpuInterface();
 
 public:
 	HSolve();
@@ -148,6 +149,8 @@ public:
     static const std::set<string>& handledClasses();
     
     static void deleteIncomingMessages( Element * orig, const string finfo);
+
+	bool operator==( HSolve other );
 	
 private:
 	static vector< Id > children( Id obj );

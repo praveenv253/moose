@@ -18,14 +18,16 @@ using namespace std;
 extern void testHinesMatrix(); // Defined in HinesMatrix.cpp
 extern void testHSolvePassive(); // Defined in HSolvePassive.cpp
 extern void testHSolveUtils(); // Defined in HSolveUtils.cpp
-/*
+extern void testGpuInterface(); // Defined in testGpuInterface.cpp
+
 void testHSolve()
 {
 	testHSolveUtils();
 	testHinesMatrix();
 	testHSolvePassive();
+	testGpuInterface();
 }
-*/
+
 //////////////////////////////////////////////////////////////////////////////
 // Helper functions called in testHinesMatrix, testHSolvePassive, etc.
 //////////////////////////////////////////////////////////////////////////////
