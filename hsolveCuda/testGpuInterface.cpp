@@ -8,6 +8,22 @@
  */
 void testGpuInterface()
 {
+	HSolve *hsolve;
+	hsolve->nCompt_ = 0;
+	hsolve->stage_ = 0;
+
+	// Setup
+	GpuInterface gpu( hsolve );
+
+	// Unsetup
+	gpu.unsetup();
+	ASSERT( hsolve->HS_ == gpu.hsolve_->HS, "Gpu Interface, HS" );
+	ASSERT( hsolve->HJ_ == gpu.hsolve_->HJ, "Gpu Interface, HJ" );
+	ASSERT( hsolve->HJCopy_ == gpu.hsolve_->HJCopy, "Gpu Interface, HJCopy" );
+	ASSERT( hsolve->V_ == gpu.hsolve_->V, "Gpu Interface, V" );
+	ASSERT( hsolve->VMid_ == gpu.hsolve_->VMid, "Gpu Interface, VMid" );
+
+#if 0
 	cout << "\nTesting GpuInterface\n" << flush;
 
 	Shell* shell = reinterpret_cast< Shell* >( Id().eref().data() );
@@ -316,6 +332,7 @@ void testGpuInterface()
 		// cleanup
 		shell->doDelete( n );
 	}
+#endif
 }
 
 unsigned int getNumCores()
