@@ -12,6 +12,7 @@
 #include "ElementValueFinfo.h"
 
 #include "tryConn.h"
+#include "../cuda/testGpuInterface.h"
 
 // Here's all the Sender class stuff:
 
@@ -104,6 +105,9 @@ void Sender::process( const Eref& e, ProcPtr p )
 	// I mean, _something_ should happen every time step, right?
 	X_ *= 2;
 	XOut()->send( e, p->threadIndexInGroup, X_ );
+
+	// XXX For testing GpuInterface setup-unsetup
+	testGpuInterface();
 }
 
 ///////////////////////////////////////////////////////////////////////////////

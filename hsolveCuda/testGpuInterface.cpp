@@ -1,5 +1,5 @@
 #include "cudaLibrary/GpuInterface.h"
-#include "../shell/Shell.h"
+//#include "../shell/Shell.h"
 
 #include "testGpuInterface.h"
 
@@ -8,7 +8,7 @@
  */
 void testGpuInterface()
 {
-	HSolve *hsolve;
+	HSolve *hsolve = new HSolve;
 	hsolve->nCompt_ = 0;
 	hsolve->stage_ = 0;
 
@@ -335,6 +335,7 @@ void testGpuInterface()
 #endif
 }
 
+#if 0
 unsigned int getNumCores()
 {
 	unsigned int numCPU = 0;
@@ -379,4 +380,4 @@ int main()
 	testGpuInterface();
 	return 0;
 }
-
+#endif

@@ -28,6 +28,7 @@ OBJ = \
 	ZombieCompartment.o \
 	ZombieCaConc.o \
 	ZombieHHChannel.o \
+	testGpuInterface.o \
 
 HEADERS = \
 	../basecode/header.h
@@ -46,6 +47,7 @@ HSolve.o:	../biophysics/Compartment.h ZombieCompartment.h ../biophysics/CaConc.h
 ZombieCompartment.o:	ZombieCompartment.h ../randnum/randnum.h ../biophysics/Compartment.h HSolve.h HSolveActive.h RateLookup.h HSolvePassive.h HinesMatrix.h HSolveStruct.h ../basecode/ElementValueFinfo.h
 ZombieCaConc.o:	ZombieCaConc.h ../biophysics/CaConc.h HSolve.h HSolveActive.h RateLookup.h HSolvePassive.h HinesMatrix.h HSolveStruct.h ../basecode/ElementValueFinfo.h
 ZombieHHChannel.o:	ZombieHHChannel.h ../biophysics/HHChannel.h ../biophysics/ChanBase.h ../biophysics/HHGate.h HSolve.h HSolveActive.h RateLookup.h HSolvePassive.h HinesMatrix.h HSolveStruct.h ../basecode/ElementValueFinfo.h
+testGpuInterface.o: testGpuInterface.h cudaLibrary/GpuInterface.h
 
 .cpp.o:
 	$(CXX) $(CXXFLAGS) $(SMOLDYN_FLAGS) -I/usr/local/cuda/include -I. -I../basecode -I../msg $< -c
@@ -59,7 +61,7 @@ subdirs:
 clean:
 	rm -f *.o $(TARGET) core core.*
 
-BASECODE_OBJ = \
+#BASECODE_OBJ = \
 	../basecode/consts.o	\
 	../basecode/Element.o	\
 	../basecode/Qinfo.o \
@@ -95,6 +97,7 @@ BASECODE_OBJ = \
 	../basecode/ReduceBase.o \
 	../basecode/testAsync.o	\
 
-test: _hsolveCuda.o testGpuInterface.cpp testGpuInterface.h ../shell/_shell.o ../basecode/_basecode.o cudaLibrary/GpuInterface.o
-	g++ -c testGpuInterface.cpp
-	g++ ../shell/_shell.o $(BASECODE_OBJ) ../biophysics/_biophysics.o ../msg/_msg.o ../builtins/_builtins.o ../external/muparser/_muparser.o ../scheduling/_scheduling.o -lhdf5 -lhdf5_hl ../randnum/_randnum.o ../kinetics/_kinetics.o ../manager/_manager.o ../utility/_utility.o ../mesh/_mesh.o -lgsl -lgslcblas _hsolveCuda.o cudaLibrary/GpuInterface.o testGpuInterface.o -lcuda -L/usr/local/cuda-5.0/lib64 -lcudart -LcudaLibrary -lmooseCudaLibrary -o testGpuInterface
+#test: _hsolveCuda.o testGpuInterface.cpp testGpuInterface.h ../shell/_shell.o ../basecode/_basecode.o cudaLibrary/GpuInterface.o
+#	g++ -c testGpuInterface.cpp
+#	g++ ../shell/_shell.o $(BASECODE_OBJ) ../biophysics/_biophysics.o ../msg/_msg.o ../builtins/_builtins.o ../external/muparser/_muparser.o ../scheduling/_scheduling.o -lhdf5 -lhdf5_hl ../randnum/_randnum.o ../kinetics/_kinetics.o ../manager/_manager.o ../utility/_utility.o ../mesh/_mesh.o -lgsl -lgslcblas _hsolveCuda.o cudaLibrary/GpuInterface.o testGpuInterface.o -lcuda -L/usr/local/cuda-5.0/lib64 -lcudart -LcudaLibrary -lmooseCudaLibrary -o testGpuInterface
+
