@@ -19,6 +19,7 @@ extern void testHinesMatrix(); // Defined in HinesMatrix.cpp
 extern void testHSolvePassive(); // Defined in HSolvePassive.cpp
 extern void testHSolveUtils(); // Defined in HSolveUtils.cpp
 extern void testGpuInterface(); // Defined in testGpuInterface.cpp
+extern void testSetupWorking(); // Defined in testGpuInterface.cpp
 
 void testHSolve()
 {
@@ -26,6 +27,7 @@ void testHSolve()
 	testHinesMatrix();
 	testHSolvePassive();
 	testGpuInterface();
+	testSetupWorking();
 }
 
 //////////////////////////////////////////////////////////////////////////////

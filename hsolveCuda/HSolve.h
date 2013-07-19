@@ -21,6 +21,7 @@ class HSolve: public HSolveActive
 {
 	friend class GpuInterface;
 	friend void testGpuInterface();
+	friend void testSetupWorking();
 
 public:
 	HSolve();

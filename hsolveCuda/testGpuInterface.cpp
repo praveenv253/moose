@@ -352,4 +352,205 @@ void testGpuInterface()
 	cout << endl;
 }
 
+void testSetupWorking()
+{
+	cout << endl << "Testing setup working: " << flush;
+
+	Shell* shell = reinterpret_cast< Shell* >( Id().eref().data() );
+
+	vector< int* > childArray;
+	vector< unsigned int > childArraySize;
+
+	/**
+	 *  Cell 0: Single compartment
+	 */
+
+	int childArray_7[ ] =
+	{
+		/* c0  */  -1,
+	};
+
+	childArray.push_back( childArray_7 );
+	childArraySize.push_back( sizeof( childArray_7 ) / sizeof( int ) );
+
+	/**
+	 *  Cell 1: 3 compartments, Y configuration
+	 *
+	 *                  1
+	 *                  |
+	 *                  |
+	 *                 / \
+	 *                /   \
+	 *               0     2
+	 */
+
+	int childArray_8[ ] =
+	{
+		/* c0  */  -1,
+		/* c1  */  -1, 0, 2,
+		/* c2  */  -1,
+	};
+
+	childArray.push_back( childArray_8 );
+	childArraySize.push_back( sizeof( childArray_8 ) / sizeof( int ) );
+
+	/**
+	 *  Cell 9: 3 compartments; series configuration
+	 *
+	 *                  0
+	 *                  |
+	 *                  1
+	 *                  |
+	 *                  2
+	 */
+
+	int childArray_9[ ] =
+	{
+		/* c0  */  -1, 1,
+		/* c1  */  -1, 2,
+		/* c2  */  -1,
+	};
+
+	childArray.push_back( childArray_9 );
+	childArraySize.push_back( sizeof( childArray_9 ) / sizeof( int ) );
+
+	////////////////////////////////////////////////////////////////////////////
+	// Run tests
+	////////////////////////////////////////////////////////////////////////////
+	/*
+	 * Solver instance.
+	 */
+	HSolve *hsolve = new HSolve;
+
+	/*
+	 * Model details.
+	 */
+	double dt = 1.0;
+	vector< TreeNodeStruct > tree;
+	vector< double > Em;
+	vector< double > B;
+	vector< double > V;
+	vector< double > VMid;
+
+	/*
+	 * Loop over cells.
+	 */
+	int i;
+	int j;
+	//~ bool success;
+	int nCompt;
+	int* array;
+	unsigned int arraySize;
+	for ( int cell = childArray.size()-1; cell >= 0; cell-- ) {
+		//cout << "Cell number: " << cell << endl;
+
+		array = childArray[ cell ];
+		arraySize = childArraySize[ cell ];
+		nCompt = count( array, array + arraySize, -1 );
+
+		//////////////////////////////////////////
+		// Prepare local information on cell
+		//////////////////////////////////////////
+		tree.clear();
+		tree.resize( nCompt );
+		Em.clear();
+		V.clear();
+		//cout << "First for loop" << endl;
+		for ( i = 0; i < nCompt; i++ ) {
+			tree[ i ].Ra = 3.0 + 3.0 * i;
+			tree[ i ].Rm = 0.5 + 0.5 * i;
+			tree[ i ].Cm = 2.0 + 1.0 * i * i;
+			Em.push_back( -0.06 );
+			V.push_back( -0.06 + 0.01 * i );
+		}
+
+		int count = -1;
+		//cout << "Second for loop; arraysize=" << arraySize << endl;
+		for ( unsigned int a = 0; a < arraySize; a++ ) {
+			if ( array[ a ] == -1 )
+				count++;
+			else
+				tree[ count ].children.push_back( array[ a ] );
+		}
+
+		//////////////////////////////////////////
+		// Create cell inside moose; setup solver.
+		//////////////////////////////////////////
+		//cout << "Creating id" << endl;
+		Id n = shell->doCreate( "Neutral", Id(), "n" );
+
+		vector< Id > c( nCompt );
+		//cout << "Third for loop" << endl;
+		for ( i = 0; i < nCompt; i++ ) {
+			ostringstream name;
+			name << "c" << i;
+			c[ i ] = shell->doCreate( "Compartment", n, name.str() );
+
+			Field< double >::set( c[ i ], "Ra", tree[ i ].Ra );
+			Field< double >::set( c[ i ], "Rm", tree[ i ].Rm );
+			Field< double >::set( c[ i ], "Cm", tree[ i ].Cm );
+			Field< double >::set( c[ i ], "Em", Em[ i ] );
+			Field< double >::set( c[ i ], "initVm", V[ i ] );
+			Field< double >::set( c[ i ], "Vm", V[ i ] );
+		}
+
+		//cout << "Fourth for loop" << endl;
+		for ( i = 0; i < nCompt; i++ ) {
+			vector< unsigned int >& child = tree[ i ].children;
+			for ( j = 0; j < ( int )( child.size() ); j++ ) {
+				MsgId mid = shell->doAddMsg(
+						"Single", c[ i ], "axial", c[ child[ j ] ], "raxial" );
+				ASSERT( mid != Msg::bad, "Creating test model" );
+			}
+		}
+
+		hsolve->HSolvePassive::setup( c[ 0 ], dt );
+
+		//cout << "Starting setup" << endl;
+		GpuInterface gpu( hsolve );
+
+		// Manually check each setup data structure, especially operands
+		if ( cell == 0 ) {
+			// Single compartment
+			double testHS[] = { 6.0, 0, 6.0, 0 };
+			vector< double > HS;
+			HS.assign(testHS, testHS + 4);
+			gpu.unsetup();
+			// Check one by one. Probably needs to be a friend of HSolve.
+			ASSERT( HS == gpu.hsolve_->HS_, "Setup error, cell 0" );
+		}
+		else if ( cell == 1 ) {
+			// Y configuration
+			// Only checking operands for now.
+			cout << "Here" << endl;
+			GpuDataStruct& d = gpu.data_;
+			double **testOperand = new double*[8];
+			testOperand[0] = d.HJ;
+			testOperand[1] = d.HS + 4;
+			testOperand[2] = d.VMid + 1;
+			testOperand[3] = d.HS + 8;
+			testOperand[4] = d.VMid + 2;
+			testOperand[5] = d.HJ + 4;
+			testOperand[6] = d.HS + 8;
+			testOperand[7] = d.VMid + 2;
+			for( int i=0 ; i < 8 ; i++ )
+				cout << testOperand[i] << " ";
+			vector< double* > operand;
+			operand.assign( testOperand, testOperand + 8 );
+			gpu.unsetup();
+			ASSERT( operand == gpu.operand_, "Operand setup error, Cell 1");
+		}
+		//else if ( cell == 2 ) {
+			//// Series configuration
+		//}
+
+		// cleanup
+		shell->doDelete( n );
+
+		cout << ".";
+	}
+
+	cout << endl;
+}
+
 #endif // DO_UNIT_TESTS

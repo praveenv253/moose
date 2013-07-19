@@ -62,6 +62,8 @@ void HSolveActive::step( ProcPtr info ) {
 	gpu_->synchronize();
 	gpu_->unsetup();
 
+	cout << "V in cpu: " << V_[0] << endl;
+
 	// Proceed in the CPU
 	advanceCalcium();
 	advanceSynChans( info );

@@ -428,7 +428,7 @@ ostream& operator <<( ostream& s, const HinesMatrix& m )
 
 void testHinesMatrix()
 {
-	//return;
+	return;
 	//~ cout << "\nTesting HinesMatrix" << flush;
 	vector< int* > childArray;
 	vector< unsigned int > childArraySize;

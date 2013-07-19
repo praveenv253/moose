@@ -25,28 +25,14 @@ __global__ void updateMatrixKernel(GpuDataStruct ds) {
 	double *ihs = ds.HS;
 	double *iv  = ds.V;
 	
+	printf("In gpu: %lf %lf\n", ihs[0], ihs[3]);
+
 	CompartmentStruct *ic;
-	for ( 	ic = ds.compartment;
-			ic < ds.compartment + ds.nCompts * sizeof( CompartmentStruct );
-			++ic )
-	{
+	for ( ic = ds.compartment ; ic < ds.compartment + ds.nCompts ; ++ic ) {
 		*ihs         = *( 2 + ihs );
 		*( 3 + ihs ) = *iv * ic->CmByDt + ic->EmByRm;
-		
 		ihs += 4, ++iv;
 	}
-	
-	/* Not going to consider inject at the first implementation level
-	map< unsigned int, InjectStruct >::iterator inject;
-	for ( inject = inject_.begin(); inject != inject_.end(); inject++ ) {
-		unsigned int ic = inject->first;
-		InjectStruct& value = inject->second;
-		
-		HS_[ 4 * ic + 3 ] += value.injectVarying + value.injectBasal;
-		
-		value.injectVarying = 0.0;
-	}
-	*/
 }
 
 __global__ void forwardEliminateKernel(GpuDataStruct ds) {
@@ -57,9 +43,9 @@ __global__ void forwardEliminateKernel(GpuDataStruct ds) {
 	
 	if ( iop ) {
 		for( int x = 0 ; x < 36 ; x++ ) {		//XXX debugging only
-			printf( "%p ", *(iop + x) );
+			//printf( "%p ", *(iop + x) );
 		}
-		printf("\n");
+		//printf("\n");
 	}
 	
 	double pivot;
@@ -83,14 +69,14 @@ __global__ void forwardEliminateKernel(GpuDataStruct ds) {
 		
 		pivot = *ihs;
 		if ( rank == 1 ) {
-			printf("rank=1; ");
-			printf("ic: %d ", ic);
-			printf("ihs: %p ", ihs);
-			printf("iop: %p ", iop);
+			//printf("rank=1; ");
+			//printf("ic: %d ", ic);
+			//printf("ihs: %p ", ihs);
+			//printf("iop: %p ", iop);
 			j = *iop;
 			s = *(iop + 1);
 			
-			printf( "s: %p\n", s );
+			//printf( "s: %p\n", s );
 			
 			division    = *( j + 1 ) / pivot;
 			*( s )     -= division * *j;
@@ -98,21 +84,21 @@ __global__ void forwardEliminateKernel(GpuDataStruct ds) {
 			
 			iop += 3;
 		} else if ( rank == 2 ) {
-			printf("rank=2; ");
-			printf("ic: %d ", ic);
-			printf("ihs: %p ", ihs);
-			printf("iop: %p ", iop);
+			//printf("rank=2; ");
+			//printf("ic: %d ", ic);
+			//printf("ihs: %p ", ihs);
+			//printf("iop: %p ", iop);
 			j = *iop;
 			
 			s           = *( iop + 1 );
-			printf( "s: %p ", s );
+			//printf( "s: %p ", s );
 			division    = *( j + 1 ) / pivot;
 			*( s )     -= division * *j;
 			*( j + 4 ) -= division * *( j + 2 );
 			*( s + 3 ) -= division * *( ihs + 3 );
 			
 			s           = *( iop + 3 );
-			printf( "s: %p\n", s );
+			//printf( "s: %p\n", s );
 			division    = *( j + 3 ) / pivot;
 			*( j + 5 ) -= division * *j;
 			*( s )     -= division * *( j + 2 );
@@ -120,10 +106,10 @@ __global__ void forwardEliminateKernel(GpuDataStruct ds) {
 			
 			iop += 5;
 		} else {
-			printf("rank=%d; ", rank);
-			printf("ic: %d ", ic);
-			printf("ihs: %p ", ihs);
-			printf("iop: %p\n", iop);
+			//printf("rank=%d; ", rank);
+			//printf("ic: %d ", ic);
+			//printf("ihs: %p ", ihs);
+			//printf("iop: %p\n", iop);
 			double **end = iop + 3 * rank * ( rank + 1 );
 			for ( ; iop < end; iop += 3 )
 				**iop -= **( iop + 2 ) / pivot * **( iop + 1 );
@@ -151,6 +137,8 @@ __global__ void backwardSubstituteKernel(GpuDataStruct ds) {
 	double **ibop = ds.backOperand + ds.backOperandSize - 1;
 	JunctionStruct *junction = ds.junction + ds.junctionSize - 1;
 	
+	printf("In gpu: %lf %lf\n", ihs[-3], ihs[0]);
+
 	*ivmid = *ihs / *( ihs - 3 );
 	*iv = 2 * *ivmid - *iv;
 	--ic, --ivmid, --iv, ihs -= 4;
@@ -209,5 +197,7 @@ __global__ void backwardSubstituteKernel(GpuDataStruct ds) {
 		
 		--ic, --ivmid, --iv, ihs -= 4;
 	}
+
+	printf("V in gpu: %lf %lf\n", ds.VMid[0], ds.V[0]);
 }
 

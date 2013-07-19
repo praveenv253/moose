@@ -11,10 +11,20 @@ OBJS += \
 
 NVCC_FLAGS = --compile -G -g -O0 -Xcompiler -fPIC -x cu -arch=sm_20
 
+ifeq ($(BUILD),debug)
+NVCC_FLAGS += -DDO_UNIT_TESTS
+endif
+
+TARGET_FLAGS = -shared -link
+
+ifeq ($(BUILD),debug)
+TARGET_FLAGS += -DDO_UNIT_TESTS
+endif
+
 all: libmooseCudaLibrary.so
 
 libmooseCudaLibrary.so: $(OBJS) $(HEADERS)
-	nvcc -shared -link -o "libmooseCudaLibrary.so" $(OBJS)
+	nvcc $(TARGET_FLAGS) -o "libmooseCudaLibrary.so" $(OBJS)
 
 HSOLVE_HEADERS = \
 	../../basecode/header.h \
@@ -39,5 +49,5 @@ clean:
 	rm -rf $(CU_DEPS) $(OBJS) libmooseCudaLibrary.so
 
 test: testGpuKernels.cu libmooseCudaLibrary.so
-	LD_LIBRARY_PATH="$LD_LIBRARY_PATH:./" nvcc -g -G -lcuda -lcudart -L./ \
+	LD_LIBRARY_PATH="$$LD_LIBRARY_PATH:./" nvcc -g -G -lcuda -lcudart -L./ \
 		-lmooseCudaLibrary -o testGpuKernels testGpuKernels.cu -arch=sm_20
