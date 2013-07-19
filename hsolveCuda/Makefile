@@ -62,4 +62,5 @@ subdirs:
 	@(for i in $(SUBDIR) $(PARALLEL_DIR); do $(MAKE) -C $$i; done)
 
 clean:
+	@(for i in $(SUBDIR) ; do $(MAKE) -C $$i clean;  done)
 	rm -f *.o $(TARGET) core core.*
