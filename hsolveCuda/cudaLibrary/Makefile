@@ -11,10 +11,20 @@ OBJS += \
 
 NVCC_FLAGS = --compile -G -g -O0 -Xcompiler -fPIC -x cu -arch=sm_20
 
+ifeq ($(BUILD),debug)
+NVCC_FLAGS += -DDO_UNIT_TESTS
+endif
+
+TARGET_FLAGS = -shared -link
+
+ifeq ($(BUILD),debug)
+TARGET_FLAGS += -DDO_UNIT_TESTS
+endif
+
 all: libmooseCudaLibrary.so
 
 libmooseCudaLibrary.so: $(OBJS) $(HEADERS)
-	nvcc -shared -link -o "libmooseCudaLibrary.so" $(OBJS)
+	nvcc $(TARGET_FLAGS) -o "libmooseCudaLibrary.so" $(OBJS)
 
 HSOLVE_HEADERS = \
 	../../basecode/header.h \

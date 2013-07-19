@@ -38,6 +38,10 @@ struct GpuDataStruct {
 	unsigned int operandSize;
 	unsigned int backOperandSize;
 	unsigned int junctionSize;
+
+#ifdef DO_UNIT_TESTS
+	InjectStruct *inject;
+#endif
 };
 
 /**
@@ -46,6 +50,7 @@ struct GpuDataStruct {
  */
 class GpuInterface {
 	friend void testGpuInterface();
+	friend void testSetupWorking();
 
 	protected:
 		unsigned int numBlocks_;
@@ -64,11 +69,14 @@ class GpuInterface {
 		void gpuBackwardSubstitute();
 		void synchronize();
 
+#ifdef DO_UNIT_TESTS
 		// Functions for unit tests
 		double getA( unsigned int, unsigned int ) const;
 		double getB( unsigned int ) const;
 		double getV( unsigned int ) const;
 		double getVMid( unsigned int ) const;
+		void copyInject();
+#endif
 
 		/**
 		 * Single-step-synchronization function - you can test by syncing

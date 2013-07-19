@@ -127,6 +127,16 @@ GpuInterface::GpuInterface(HSolve *hsolve)
 		data_.backOperand = NULL;
 	}
 
+#ifdef DO_UNIT_TESTS
+	if ( data_.nCompts > 0 ) {
+		_( cudaMalloc( (void **) &data_.inject,
+					   data_.nCompts * sizeof(InjectStruct) ) );
+		copyInject();
+	} else {
+		data_.inject = NULL;
+	}
+#endif
+
 	// Need to decide how many blocks and threads to use per HSolve object
 	// For now, keep each hsolver on its own thread.
 	numBlocks_ = 1;
@@ -303,13 +313,73 @@ void GpuInterface::gpuBackwardSubstitute()
 	dim3 numThreads(numThreads_);
 
 	backwardSubstituteKernel<<< numBlocks, numThreads >>>( data_ );
-	
+
 	stage_ = 2;    // Backward substitution done.
 }
 
 void GpuInterface::synchronize()
 {
 	cudaDeviceSynchronize();
+}
+
+void GpuInterface::unsetup()
+{
+	// Create temporary storage space before assigning the vectors in HSolve.
+	double *HS = new double[ 4 * data_.nCompts ];
+	double *HJ = new double[ data_.HJSize ];
+	double *V = new double[ data_.nCompts ];
+	double **operand = new double*[ data_.operandSize ];
+
+	// Copy data from the GPU back to the CPU and then into the HSolve vectors
+	_( cudaMemcpy( HS, data_.HS, 4 * data_.nCompts * sizeof(double),
+				   cudaMemcpyDeviceToHost ) );
+	hsolve_->HS_.assign( HS, HS + 4 * data_.nCompts );
+
+	_( cudaMemcpy( HJ, data_.HJ, data_.HJSize * sizeof(double),
+				   cudaMemcpyDeviceToHost ) );
+	hsolve_->HJ_.assign( HJ, HJ + data_.HJSize );
+
+	_( cudaMemcpy( HJ, data_.HJCopy, data_.HJSize * sizeof(double),
+				   cudaMemcpyDeviceToHost ) );
+	hsolve_->HJCopy_.assign( HJ, HJ + data_.HJSize );
+
+	_( cudaMemcpy( V, data_.V, data_.nCompts * sizeof(double),
+				   cudaMemcpyDeviceToHost ) );
+	hsolve_->V_.assign( V, V + data_.nCompts );
+
+	_( cudaMemcpy( V, data_.VMid, data_.nCompts * sizeof(double),
+				   cudaMemcpyDeviceToHost ) );
+	hsolve_->VMid_.assign( V, V + data_.nCompts );
+	
+	_( cudaMemcpy( operand, data_.operand, data_.operandSize * sizeof(double),
+				   cudaMemcpyDeviceToHost ) );
+	operand_.assign( operand, operand + data_.operandSize );
+
+}
+
+#ifdef DO_UNIT_TESTS
+
+/**
+ * Function to copy inject_ from the CPU to the GPU. This is used only for
+ * testing the RC-behaviour of a single compartment. Hence it is being defined
+ * only if unit tests are performed
+ */
+void GpuInterface::copyInject()
+{
+	map< unsigned int, InjectStruct >::iterator i;
+	vector< InjectStruct > inject( data_.nCompts, InjectStruct() );
+
+	for ( i = hsolve_->inject_.begin(); i != hsolve_->inject_.end(); ++i ) {
+		unsigned int ic = i->first;
+		InjectStruct& value = i->second;
+		inject[ ic ] = value;
+	}
+
+	// Memory must already be allocated. This should have happened during
+	// construction of the object.
+	_( cudaMemcpy( data_.inject, &inject[ 0 ],
+				   data_.nCompts * sizeof(InjectStruct),
+				   cudaMemcpyHostToDevice ) );
 }
 
 // getA and getB functions used in unit tests for comparing matrix element
@@ -404,31 +474,5 @@ double GpuInterface::getV( unsigned int row ) const
 	return getd( data_.V + row );
 }
 
-void GpuInterface::unsetup()
-{
-	// Create temporary storage space before assigning the vectors in HSolve.
-	double *HS = new double[ 4 * data_.nCompts ];
-	double *HJ = new double[ data_.HJSize ];
-	double *V = new double[ data_.nCompts ];
+#endif // DO_UNIT_TESTS
 
-	// Copy data from the GPU back to the CPU and then into the HSolve vectors
-	_( cudaMemcpy( HS, data_.HS, 4 * data_.nCompts * sizeof(double),
-				   cudaMemcpyDeviceToHost ) );
-	hsolve_->HS_.assign( HS, HS + 4 * data_.nCompts );
-
-	_( cudaMemcpy( HJ, data_.HJ, data_.HJSize * sizeof(double),
-				   cudaMemcpyDeviceToHost ) );
-	hsolve_->HJ_.assign( HJ, HJ + data_.HJSize );
-
-	_( cudaMemcpy( HJ, data_.HJCopy, data_.HJSize * sizeof(double),
-				   cudaMemcpyDeviceToHost ) );
-	hsolve_->HJCopy_.assign( HJ, HJ + data_.HJSize );
-
-	_( cudaMemcpy( V, data_.V, data_.nCompts * sizeof(double),
-				   cudaMemcpyDeviceToHost ) );
-	hsolve_->V_.assign( V, V + data_.nCompts );
-
-	_( cudaMemcpy( V, data_.VMid, data_.nCompts * sizeof(double),
-				   cudaMemcpyDeviceToHost ) );
-	hsolve_->VMid_.assign( V, V + data_.nCompts );
-}
