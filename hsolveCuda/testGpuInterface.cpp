@@ -352,9 +352,34 @@ void testGpuInterface()
 	cout << endl;
 }
 
+#include <limits>
+/**
+ * Check 2 floating-point numbers for "equality".
+ * Algorithm (from Knuth) 'a' and 'b' are close if:
+ *      | ( a - b ) / a | < e AND | ( a - b ) / b | < e
+ * where 'e' is a small number.
+ *
+ * In this function, 'e' is computed as:
+ *      e = tolerance * machine-epsilon
+ */
+template< class T >
+bool isClose( T a, T b, T tolerance )
+{
+	T epsilon = std::numeric_limits< T >::epsilon();
+
+	if ( a == b )
+		return true;
+
+	if ( a == 0 || b == 0 )
+		return ( fabs( a - b ) < tolerance * epsilon );
+
+	return (    fabs( ( a - b ) / a ) < tolerance * epsilon
+			 && fabs( ( a - b ) / b ) < tolerance * epsilon );
+}
+
 void testSetupWorking()
 {
-	cout << endl << "Testing setup working: " << flush;
+	cout << "Testing setup working: " << flush;
 
 	Shell* shell = reinterpret_cast< Shell* >( Id().eref().data() );
 
@@ -382,6 +407,11 @@ void testSetupWorking()
 	 *                 / \
 	 *                /   \
 	 *               0     2
+	 *
+	 *  Note that these indices are NOT the Hines indices! The Hines indices
+	 *  are in fact the reverse, since we shall do a depth-first-search
+	 *  starting with the compartment labelled here as 0, which will then
+	 *  receive the largest Hines index.
 	 */
 
 	int childArray_8[ ] =
@@ -426,6 +456,8 @@ void testSetupWorking()
 	 * Model details.
 	 */
 	double dt = 1.0;
+	double tolerance = 1.0;			// Tolerance for double comparisons: gets
+									// multiplied with numeric_limits::epsilon
 	vector< TreeNodeStruct > tree;
 	vector< double > Em;
 	vector< double > B;
@@ -457,7 +489,7 @@ void testSetupWorking()
 		V.clear();
 		//cout << "First for loop" << endl;
 		for ( i = 0; i < nCompt; i++ ) {
-			tree[ i ].Ra = 3.0 + 3.0 * i;
+			tree[ i ].Ra = 2.0;
 			tree[ i ].Rm = 0.5 + 0.5 * i;
 			tree[ i ].Cm = 2.0 + 1.0 * i * i;
 			Em.push_back( -0.06 );
@@ -512,17 +544,79 @@ void testSetupWorking()
 		// Manually check each setup data structure, especially operands
 		if ( cell == 0 ) {
 			// Single compartment
-			double testHS[] = { 6.0, 0, 6.0, 0 };
-			vector< double > HS;
-			HS.assign(testHS, testHS + 4);
+
+			// First check sizes of various data elements.
+			ASSERT( gpu.data_.nCompts == 1, "Setup error: cell 0, nCompts" );
+			ASSERT( gpu.data_.HJSize == 0, "Setup error: cell 0, HJSize" );
+			ASSERT( gpu.data_.operandSize == 0,
+					"Setup error: cell 0, operandSize" );
+			ASSERT( gpu.data_.backOperandSize == 0,
+					"Setup error: cell 0, backOperandSize" );
+			ASSERT( gpu.data_.junctionSize == 0,
+					"Setup error: cell 0, junctionSize" );
+
+			// This tests setup and unsetup in one fell swoop!
+			// Unless both setup and unsetup are *silently* failing. In which
+			// case, this entire test case is only telling you whether or not
+			// HSolvePassive::setup is working correctly :P
 			gpu.unsetup();
-			// Check one by one. Probably needs to be a friend of HSolve.
-			ASSERT( HS == gpu.hsolve_->HS_, "Setup error, cell 0" );
+
+			// Check other elements one by one.
+			double testHS[] = { 6.0, 0, 6.0, 0 };
+			for ( i = 0 ; i < 4 ; ++i ) {
+				ASSERT( isClose( gpu.hsolve_->HS_[i], testHS[i], tolerance ),
+						"Setup error: cell 1, HS" );
+			}
+
+			ASSERT( gpu.data_.HJ == NULL, "Setup error: cell 0, HJ" );
+			ASSERT( gpu.data_.HJCopy == NULL, "Setup error: cell 0, HJCopy" );
+			ASSERT( gpu.data_.operand == NULL,
+					"Setup error: cell 0, operand" );
+			ASSERT( gpu.data_.backOperand == NULL,
+					"Setup error: cell 0, backOperand" );
+			ASSERT( gpu.data_.junction == NULL,
+					"Setup error: cell 0, junction" );
+			ASSERT( gpu.hsolve_->V_[0] == -0.06, "Setup error: cell 0, V" );
+
 		}
 		else if ( cell == 1 ) {
 			// Y configuration
-			// Only checking operands for now.
-			cout << "Here" << endl;
+
+			// First check sizes of various data elements.
+			ASSERT( gpu.data_.nCompts == 3, "Setup error: cell 1, nCompts" );
+			ASSERT( gpu.data_.HJSize == 6, "Setup error: cell 1, HJSize" );
+			ASSERT( gpu.data_.operandSize == 8,
+					"Setup error: cell 1, operandSize" );
+			ASSERT( gpu.data_.backOperandSize == 0,
+					"Setup error: cell 1, backOperandSize" );
+			ASSERT( gpu.data_.junctionSize == 2,
+					"Setup error: cell 1, junctionSize" );
+
+			gpu.unsetup();
+
+			double testHS[] = {
+				13.0 + 1 / 3.0,		0,		13.0 + 1 / 3.0,		0,
+				7.0 + 2 / 3.0,		0,		7.0 + 2 / 3.0,		0,
+				6.0 + 2 / 3.0,		0,		6.0 + 2 / 3.0,		0,
+			};
+			for ( i = 0 ; i < 12 ; ++i ) {
+				ASSERT( isClose( gpu.hsolve_->HS_[i], testHS[i], tolerance ),
+						"Setup error: cell 1, HS" );
+			}
+
+			double testHJ[] = { -1 / 3.0, -1 / 3.0, -1 / 3.0,
+								-1 / 3.0, -1 / 3.0, -1 / 3.0 };
+			for ( i = 0 ; i < 6 ; ++i ) {
+				ASSERT( isClose( gpu.hsolve_->HJ_[i], testHJ[i], tolerance ),
+						"Setup error: cell 1, HJ" );
+			}
+
+			double testV[] = { -0.04, -0.05, -0.06 };
+			for ( i = 0 ; i < 3 ; ++i ) {
+				ASSERT( isClose( gpu.hsolve_->V_[i], testV[i], tolerance ),
+						"Setup error: cell 1, V" );
+			}
+
 			GpuDataStruct& d = gpu.data_;
 			double **testOperand = new double*[8];
 			testOperand[0] = d.HJ;
@@ -533,16 +627,52 @@ void testSetupWorking()
 			testOperand[5] = d.HJ + 4;
 			testOperand[6] = d.HS + 8;
 			testOperand[7] = d.VMid + 2;
-			for( int i=0 ; i < 8 ; i++ )
-				cout << testOperand[i] << " ";
 			vector< double* > operand;
 			operand.assign( testOperand, testOperand + 8 );
-			gpu.unsetup();
-			ASSERT( operand == gpu.operand_, "Operand setup error, Cell 1");
+			ASSERT( gpu.operand_ == operand, "Setup error: cell 1, operand");
+
 		}
-		//else if ( cell == 2 ) {
-			//// Series configuration
-		//}
+		else if ( cell == 2 ) {
+			// Series configuration
+
+			// First check sizes of various data elements.
+			ASSERT( gpu.data_.nCompts == 3, "Setup error: cell 1, nCompts" );
+			ASSERT( gpu.data_.HJSize == 0, "Setup error: cell 1, HJSize" );
+			ASSERT( gpu.data_.operandSize == 0,
+					"Setup error: cell 1, operandSize" );
+			ASSERT( gpu.data_.backOperandSize == 0,
+					"Setup error: cell 1, backOperandSize" );
+			ASSERT( gpu.data_.junctionSize == 0,
+					"Setup error: cell 1, junctionSize" );
+
+			gpu.unsetup();
+
+			double testHS[] = {
+				12.5 + 2 / 3.0,		-0.5,		12.5 + 2 / 3.0,		0,
+				8.0,				-0.5,		8.0,				0,
+				6.5,				0,			6.5,				0,
+			};
+			for ( i = 0 ; i < 12 ; ++i ) {
+				ASSERT( isClose( gpu.hsolve_->HS_[i], testHS[i], tolerance ),
+						"Setup error: cell 1, HS" );
+			}
+
+			double testV[] = { -0.04, -0.05, -0.06 };
+			for ( i = 0 ; i < 3 ; ++i ) {
+				ASSERT( isClose( gpu.hsolve_->V_[i], testV[i], tolerance ),
+						"Setup error: cell 1, V" );
+			}
+
+			ASSERT( gpu.data_.HJ == NULL, "Setup error: cell 0, HJ" );
+			ASSERT( gpu.data_.HJCopy == NULL, "Setup error: cell 0, HJCopy" );
+			ASSERT( gpu.data_.operand == NULL,
+					"Setup error: cell 0, operand" );
+			ASSERT( gpu.data_.backOperand == NULL,
+					"Setup error: cell 0, backOperand" );
+			ASSERT( gpu.data_.junction == NULL,
+					"Setup error: cell 0, junction" );
+
+		}
 
 		// cleanup
 		shell->doDelete( n );
