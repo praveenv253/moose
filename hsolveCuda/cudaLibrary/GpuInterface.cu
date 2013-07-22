@@ -17,13 +17,15 @@
  * Check CUDA return value and handle appropriately
  */
 #define _(value) {															\
-	cudaError_t _m_cudaStat = value;										\
-	if (_m_cudaStat != cudaSuccess) {										\
-		std::cerr << "Error " << cudaGetErrorString(_m_cudaStat)			\
-				  << " at line " << __LINE__ << " in file " << __FILE__		\
-				  << std::endl;												\
-		exit(1);															\
-	} 																		\
+	{																		\
+		cudaError_t _m_cudaStat = value;									\
+		if (_m_cudaStat != cudaSuccess) {									\
+			std::cerr << "Error " << cudaGetErrorString(_m_cudaStat)		\
+					  << " at line " << __LINE__ << " in file "				\
+					  << __FILE__ << std::endl;								\
+			exit(1);														\
+		}																	\
+	}																		\
 }
 
 /**
@@ -44,9 +46,13 @@ GpuLookupTable::GpuLookupTable(LookupTable t)
 	nPts = t.nPts_;
 	nColumns = t.nColumns_;
 
-	_( cudaMalloc( (void **) &table, nPts * nColumns * sizeof(double) ) );
-	_( cudaMemcpy( table, &t.table_[0], nPts * nColumns * sizeof(double),
-				   cudaMemcpyHostToDevice ) );
+	if ( nPts * nColumns > 0 ) {
+		_( cudaMalloc( (void **) &table, nPts * nColumns * sizeof(double) ) );
+		_( cudaMemcpy( table, &t.table_[0], nPts * nColumns * sizeof(double),
+					   cudaMemcpyHostToDevice ) );
+	} else {
+		table = NULL;
+	}
 }
 
 /**
@@ -161,119 +167,185 @@ GpuInterface::GpuInterface(HSolve *hsolve)
 	data_.nChannels = hsolve->channel_.size();
 	data_.stateSize = hsolve->state_.size();
 	data_.nCaPools = hsolve->caConc_.size();
-	data_.caRowComptSize = *( max_element( hsolve_->caCount_.begin(),
-										   hsolve_->caCount_.end() ) );
+	vector< unsigned int >::iterator max = 	max_element(
+												hsolve->caCount_.begin(),
+												hsolve->caCount_.end()
+											);
+	if ( max != hsolve->caCount_.end() )
+		data_.caRowComptSize = *max;
+	else
+		data_.caRowComptSize = 0;
 
-	_( cudaMalloc( (void **) &data_.channel,
-				   data_.nChannels * sizeof(ChannelStruct) ) );
-	_( cudaMalloc( (void **) &data_.channelCount,
-				   data_.nCompts * sizeof(int) ) );
-	_( cudaMalloc( (void **) &data_.current,
-				   data_.nChannels * sizeof(CurrentStruct) ) );
-	_( cudaMalloc( (void **) &data_.currentBoundary,
-				   data_.nCompts * sizeof(CurrentStruct *) ) );
-	_( cudaMalloc( (void **) &data_.state,
-				   data_.stateSize * sizeof(double) ) );
-	_( cudaMalloc( (void **) &data_.caConc,
-				   data_.nCaPools * sizeof(CaConcStruct) ) );
-	_( cudaMalloc( (void **) &data_.ca,
-				   data_.nCaPools * sizeof(double) ) );
-	_( cudaMalloc( (void **) &data_.caActivation,
-				   data_.nCaPools * sizeof(double) ) );
-	_( cudaMalloc( (void **) &data_.caTarget,
-				   data_.nChannels * sizeof(double *) ) );
-	_( cudaMalloc( (void **) &data_.caCount,
-				   data_.nCompts * sizeof(unsigned int) ) );
-	_( cudaMalloc( (void **) &data_.column,
-				   data_.nChannels * sizeof(GpuLookupColumn) ) );
-	_( cudaMalloc( (void **) &data_.caRowCompt,
-				   data_.caRowComptSize * sizeof(GpuLookupRow) ) );
-	_( cudaMalloc( (void **) &data_.caRow,
-				   data_.nChannels * sizeof(GpuLookupRow *) ) );
+	// Allocate memory if the respective size is positive
+	if ( data_.nChannels > 0 ) {
+		// Size equal to the number of channels
+		_( cudaMalloc( (void **) &data_.channel,
+					   data_.nChannels * sizeof(ChannelStruct) ) );
+		_( cudaMalloc( (void **) &data_.current,
+					   data_.nChannels * sizeof(CurrentStruct) ) );
+		_( cudaMalloc( (void **) &data_.caTarget,
+					   data_.nChannels * sizeof(double *) ) );
+		_( cudaMalloc( (void **) &data_.column,
+					   data_.nChannels * sizeof(GpuLookupColumn) ) );
+		_( cudaMalloc( (void **) &data_.caRow,
+					   data_.nChannels * sizeof(GpuLookupRow *) ) );
+	} else {
+		data_.channel = NULL;
+		data_.current = NULL;
+		data_.caTarget = NULL;
+		data_.column = NULL;
+		data_.nChannels = NULL;
+	}
+	if ( data_.stateSize > 0 ) {
+		// Size equal to the number of states
+		_( cudaMalloc( (void **) &data_.state,
+					   data_.stateSize * sizeof(double) ) );
+	} else {
+		data_.state = NULL;
+	}
+	if ( data_.nCaPools > 0 ) {
+		// Size equal to the number of calcium pools
+		_( cudaMalloc( (void **) &data_.caConc,
+					   data_.nCaPools * sizeof(CaConcStruct) ) );
+		_( cudaMalloc( (void **) &data_.ca,
+					   data_.nCaPools * sizeof(double) ) );
+		_( cudaMalloc( (void **) &data_.caActivation,
+					   data_.nCaPools * sizeof(double) ) );
+	} else {
+		data_.caConc = NULL;
+		data_.ca = NULL;
+		data_.caActivation = NULL;
+	}
+	if ( data_.caRowComptSize > 0 ) {
+		// Size equal to the max. number of Ca pools across all compartments
+		_( cudaMalloc( (void **) &data_.caRowCompt,
+					   data_.caRowComptSize * sizeof(GpuLookupRow) ) );
+	} else {
+		data_.caRowCompt = NULL;
+	}
+	if ( data_.nCompts > 0 ) {
+		// Size equal to the number of compartments (with additional checks)
+		if ( data_.channel ) {
+			_( cudaMalloc( (void **) &data_.channelCount,
+						   data_.nCompts * sizeof(int) ) );
+		} else {
+			data_.channelCount = NULL;
+		}
+		if ( data_.current ) {
+			_( cudaMalloc( (void **) &data_.currentBoundary,
+						   data_.nCompts * sizeof(CurrentStruct *) ) );
+		} else {
+			data_.current = NULL;
+		}
+		if ( data_.caConc ) {
+			_( cudaMalloc( (void **) &data_.caCount,
+						   data_.nCompts * sizeof(unsigned int) ) );
+		} else {
+			data_.caCount = NULL;
+		}
+	} else {
+		data_.channelCount = NULL;
+		data_.currentBoundary = NULL;
+		data_.caCount = NULL;
+	}
 
-	// Copy data for HSolveActive fields
-	_( cudaMemcpy( data_.channel, &hsolve->channel_[0],
-				   data_.nChannels * sizeof(ChannelStruct),
-				   cudaMemcpyHostToDevice ) );
-	_( cudaMemcpy( data_.channelCount, &hsolve->channelCount_[0],
-				   data_.nCompts * sizeof(int),
-				   cudaMemcpyHostToDevice ) );
-	_( cudaMemcpy( data_.current, &hsolve->current_[0],
-				   data_.nChannels * sizeof(CurrentStruct),
-				   cudaMemcpyHostToDevice ) );
-	// currentBoundary needs to be dealt with separately.
-	_( cudaMemcpy( data_.state, &hsolve->state_[0],
-				   data_.stateSize * sizeof(double),
-				   cudaMemcpyHostToDevice ) );
-	_( cudaMemcpy( data_.caConc, &hsolve->caConc_[0],
-				   data_.nCaPools * sizeof(CaConcStruct),
-				   cudaMemcpyHostToDevice ) );
-	_( cudaMemcpy( data_.ca, &hsolve->ca_[0],
-				   data_.nCaPools * sizeof(double),
-				   cudaMemcpyHostToDevice ) );
-	_( cudaMemcpy( data_.caActivation, &hsolve->caActivation_[0],
-				   data_.nCaPools * sizeof(double),
-				   cudaMemcpyHostToDevice ) );
-	// caTarget has to be dealt with separately.
-	_( cudaMemcpy( data_.caCount, &hsolve->caCount_[0],
-				   data_.nCompts * sizeof(unsigned int),
-				   cudaMemcpyHostToDevice ) );
-	// Not too sure if this will work, because I am actually copying between
-	// two different kinds of data types.
-	_( cudaMemcpy( data_.column, &hsolve->column_[0],
-				   data_.nChannels * sizeof(GpuLookupColumn),
-				   cudaMemcpyHostToDevice ) );
-	// Need to take care of caRow here.
+	// Copy data for HSolveActive fields if the pointer has been allocated.
+	if ( data_.channel )
+		_( cudaMemcpy( data_.channel, &hsolve->channel_[0],
+					   data_.nChannels * sizeof(ChannelStruct),
+					   cudaMemcpyHostToDevice ) );
+	if ( data_.channelCount )
+		_( cudaMemcpy( data_.channelCount, &hsolve->channelCount_[0],
+					   data_.nCompts * sizeof(int),
+					   cudaMemcpyHostToDevice ) );
+	if ( data_.current )
+		_( cudaMemcpy( data_.current, &hsolve->current_[0],
+					   data_.nChannels * sizeof(CurrentStruct),
+					   cudaMemcpyHostToDevice ) );
+		// currentBoundary needs to be dealt with separately.
+	if ( data_.state )
+		_( cudaMemcpy( data_.state, &hsolve->state_[0],
+					   data_.stateSize * sizeof(double),
+					   cudaMemcpyHostToDevice ) );
+	if ( data_.caConc )
+		_( cudaMemcpy( data_.caConc, &hsolve->caConc_[0],
+					   data_.nCaPools * sizeof(CaConcStruct),
+					   cudaMemcpyHostToDevice ) );
+	if ( data_.ca )
+		_( cudaMemcpy( data_.ca, &hsolve->ca_[0],
+					   data_.nCaPools * sizeof(double),
+					   cudaMemcpyHostToDevice ) );
+	if ( data_.caActivation )
+		_( cudaMemcpy( data_.caActivation, &hsolve->caActivation_[0],
+					   data_.nCaPools * sizeof(double),
+					   cudaMemcpyHostToDevice ) );
+		// caTarget has to be dealt with separately.
+	if ( data_.caCount )
+		_( cudaMemcpy( data_.caCount, &hsolve->caCount_[0],
+					   data_.nCompts * sizeof(unsigned int),
+					   cudaMemcpyHostToDevice ) );
+	if ( data_.column )
+		// Not too sure if this will work, because I am actually copying between
+		// two different kinds of data types.
+		_( cudaMemcpy( data_.column, &hsolve->column_[0],
+					   data_.nChannels * sizeof(GpuLookupColumn),
+					   cudaMemcpyHostToDevice ) );
+		// Need to take care of caRow here.
 
 	// First, let's take care of currentBoundary
-	int i;
-	CurrentStruct **currentBoundary = new CurrentStruct*[ data_.nCompts ];
-	currentBoundary[ 0 ] = data_.current + hsolve->channelCount_[ 0 ];
-	for ( i = 1 ; i < data_.nCompts ; ++i ) {
-		currentBoundary[i] = currentBoundary[ i-1 ] + hsolve->channelCount_[i];
-	}
-	_( cudaMemcpy( data_.currentBoundary, currentBoundary,
-				   data_.nCompts * sizeof(double *),
-				   cudaMemcpyHostToDevice ) );
-
-	// Now to take care of caTarget
-	double **caTarget = new double*[ data_.nChannels ];
-	for ( i = 0 ; i < data_.nChannels ; ++i ) {
-		caTarget[i] = data_.caActivation + (long)( hsolve->caTarget_[i] -
-												   &hsolve->caActivation_[0] );
-	}
-	_( cudaMemcpy( data_.caTarget, caTarget,
-				   data_.nChannels * sizeof(double *),
-				   cudaMemcpyHostToDevice ) );
-
-	// And finally for caRow and caRowCompt
-	GpuLookupRow **caRow = new GpuLookupRow*[ data_.nChannels ];
-	int j = 0;
-	for ( i = 0 ; i < data_.nChannels ; ++i ) {
-		if ( hsolve->channel_[i].Zpower_ > 0.0 ) {
-			if ( hsolve->caRow_[j] == 0 )
-				caRow[j] = 0;
-			else
-				caRow[j] = data_.caRowCompt + (long)(hsolve->caRow_[j] -
-													 &hsolve->caRowCompt_[0]);
-			++j;
+	if ( data_.currentBoundary && data_.current ) {
+		int i;
+		CurrentStruct **currentBoundary = new CurrentStruct*[ data_.nCompts ];
+		currentBoundary[ 0 ] = data_.current + hsolve->channelCount_[ 0 ];
+		for ( i = 1 ; i < data_.nCompts ; ++i ) {
+			currentBoundary[i] =   currentBoundary[ i-1 ]
+								 + hsolve->channelCount_[i];
 		}
+		_( cudaMemcpy( data_.currentBoundary, currentBoundary,
+					   data_.nCompts * sizeof(double *),
+					   cudaMemcpyHostToDevice ) );
 	}
-	_( cudaMemcpy( data_.caRow, caRow,
-				   data_.nChannels * sizeof(GpuLookupRow *),
-				   cudaMemcpyHostToDevice ) );
+
+	if ( data_.caTarget && data_.caActivation ) {
+		// Now to take care of caTarget
+		int i;
+		double **caTarget = new double*[ data_.nChannels ];
+		for ( i = 0 ; i < data_.nChannels ; ++i ) {
+			caTarget[i] =   data_.caActivation
+						  + (long)(   hsolve->caTarget_[i]
+									- &hsolve->caActivation_[0] );
+		}
+		_( cudaMemcpy( data_.caTarget, caTarget,
+					   data_.nChannels * sizeof(double *),
+					   cudaMemcpyHostToDevice ) );
+	}
+
+	if ( data_.caRowCompt ) {
+		// And finally for caRow and caRowCompt
+		GpuLookupRow **caRow = new GpuLookupRow*[ data_.nChannels ];
+		int i, j = 0;
+		for ( i = 0 ; i < data_.nChannels ; ++i ) {
+			if ( hsolve->channel_[i].Zpower_ > 0.0 ) {
+				if ( hsolve->caRow_[j] == 0 )
+					caRow[j] = 0;
+				else
+					caRow[j] =   data_.caRowCompt
+							   + (long)(   hsolve->caRow_[j]
+										 - &hsolve->caRowCompt_[0] );
+				++j;
+			}
+		}
+		_( cudaMemcpy( data_.caRow, caRow,
+					   data_.nChannels * sizeof(GpuLookupRow *),
+					   cudaMemcpyHostToDevice ) );
+	}
 
 	// Copy the lookup tables
 	data_.vTable = GpuLookupTable::GpuLookupTable( hsolve->vTable_ );
 	data_.caTable = GpuLookupTable::GpuLookupTable( hsolve->caTable_ );
 
 	// Constants
-	_( cudaMemcpyToSymbol( &INSTANT_X, &hsolve->INSTANT_X, sizeof(int),
-						   cudaMemcpyHostToDevice ) );
-	_( cudaMemcpyToSymbol( &INSTANT_Y, &hsolve->INSTANT_Y, sizeof(int),
-						   cudaMemcpyHostToDevice ) );
-	_( cudaMemcpyToSymbol( &INSTANT_Z, &hsolve->INSTANT_Z, sizeof(int),
-						   cudaMemcpyHostToDevice ) );
+	setInstantXYZ( hsolve->INSTANT_X, hsolve->INSTANT_Y, hsolve->INSTANT_Z );
 
 	// Need to decide how many blocks and threads to use per HSolve object
 	// For now, keep each hsolver on its own thread.

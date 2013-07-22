@@ -12,10 +12,8 @@
 
 #include "GpuInterface.h"
 
-// Constants needed for active channels
-__constant__ int INSTANT_X;
-__constant__ int INSTANT_Y;
-__constant__ int INSTANT_Z;
+// Function to set constant memory from CPU via the setup function.
+void setInstantXYZ(int x, int y, int z);
 
 // HSolvePassive stuff
 __global__ void updateMatrixKernel(GpuDataStruct);

@@ -14,6 +14,33 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 
+/*
+ * Check CUDA return value and handle appropriately
+ */
+#define _(value) {															\
+	{																		\
+		cudaError_t _m_cudaStat = value;									\
+		if (_m_cudaStat != cudaSuccess) {									\
+			std::cerr << "Error " << cudaGetErrorString(_m_cudaStat)		\
+					  << " at line " << __LINE__ << " in file "				\
+					  << __FILE__ << std::endl;								\
+			exit(1);														\
+		}																	\
+	}																		\
+}
+
+// Constants needed for active channels
+__constant__ static int INSTANT_X;
+__constant__ static int INSTANT_Y;
+__constant__ static int INSTANT_Z;
+
+void setInstantXYZ(int x, int y, int z)
+{
+	_( cudaMemcpyToSymbol( INSTANT_X, &x, sizeof(int) ) );
+	_( cudaMemcpyToSymbol( INSTANT_Y, &y, sizeof(int) ) );
+	_( cudaMemcpyToSymbol( INSTANT_Z, &z, sizeof(int) ) );
+}
+
 __global__ void updateMatrixKernel(GpuDataStruct ds) {
 	/*
 	 * Copy contents of HJCopy_ into HJ_. Cannot do a vector assign() because

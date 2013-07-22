@@ -251,6 +251,13 @@ void testGpuInterface()
 	 */
 	HSolve *hsolve = new HSolve;
 
+	// Initialize the lookup tables in hsolve to zero right now. This should be
+	// done in the LookupTable constructor, really.
+	hsolve->vTable_.nPts_ = 0;
+	hsolve->vTable_.nColumns_ = 0;
+	hsolve->caTable_.nPts_ = 0;
+	hsolve->caTable_.nColumns_ = 0;
+
 	/*
 	 * Model details.
 	 */
@@ -451,6 +458,13 @@ void testSetupWorking()
 	 * Solver instance.
 	 */
 	HSolve *hsolve = new HSolve;
+
+	// Initialize the lookup tables in hsolve to zero right now. This should be
+	// done in the LookupTable constructor, really.
+	hsolve->vTable_.nPts_ = 0;
+	hsolve->vTable_.nColumns_ = 0;
+	hsolve->caTable_.nPts_ = 0;
+	hsolve->caTable_.nColumns_ = 0;
 
 	/*
 	 * Model details.
