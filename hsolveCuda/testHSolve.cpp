@@ -27,8 +27,8 @@ void testHSolve()
 	testHSolveUtils();
 	testHinesMatrix();
 	testHSolvePassive();
-	testGpuKernels();
 	testGpuInterface();
+	testGpuKernels();
 	testSetupWorking();
 }
 

@@ -4,6 +4,33 @@
 #include "GpuInterface.h"
 #include "GpuKernels.h"
 
+#include <limits>
+/**
+ * Check 2 floating-point numbers for "equality".
+ * Algorithm (from Knuth) 'a' and 'b' are close if:
+ *      | ( a - b ) / a | < e AND | ( a - b ) / b | < e
+ * where 'e' is a small number.
+ *
+ * In this function, 'e' is computed as:
+ *      e = tolerance * machine-epsilon
+ */
+template< class T >
+bool isClose( T a, T b, T tolerance )
+{
+	T epsilon = std::numeric_limits< T >::epsilon();
+
+	if ( a == b )
+		return true;
+
+	if ( a == 0 || b == 0 )
+		return ( fabs( a - b ) < tolerance * epsilon );
+
+	return (    fabs( ( a - b ) / a ) < tolerance * epsilon
+			 && fabs( ( a - b ) / b ) < tolerance * epsilon );
+}
+
+const double tolerance = 1.0;
+
 void testHSonly()
 {
 	// Fabricate a GpuDataStruct for testing purposes and check whether or
@@ -12,13 +39,13 @@ void testHSonly()
 	GpuDataStruct d;
 
 	// First create a test matrix.
-	const int n = 4;				// Start with a 3x3 matrix
-	double testHS[] = {	1, 0, 0, 1,
-						1, 0, 0, 2,
-						1, 0, 0, 3,
-						1, 0, 0, 4 };	// Equivalent of HS => tridiagonal
-	double V[] = { 0, 0, 0 };
-	double VMid[] = { 0, 0, 0 };
+	const int n = 4;				// Start with a 4x4 matrix
+	double testHS[] = {	2, 1, 0, 4,
+						3, 1, 0, 10,
+						4, 1, 0, 18,
+						5, 0, 0, 23 };	// Equivalent of HS => tridiagonal
+	double V[] = { 0, 0, 0, 0 };
+	double VMid[] = { 0, 0, 0, 0 };
 
 	// Allocate memory as required for d.
 	cudaMalloc( (void **)&d.HS, 4 * n * sizeof(double) );
@@ -51,12 +78,13 @@ void testHSonly()
 
 	// Check the matrix after forward eliminate
 	cudaMemcpy( testHS, d.HS, 4 * n * sizeof(double), cudaMemcpyDeviceToHost );
-	std::cout << "HS after forward eliminate" << std::endl;
+	//std::cout << "HS after forward eliminate" << std::endl;
 	int i;
 	for( i = 0 ; i < 4 * n ; i++ ) {
-		std::cout << testHS[i] << " ";
-		if( i % 4 == 3 )
-			std::cout << std::endl;
+		//std::cout << testHS[i] << " ";
+		if( i % 4 == 3 ) {
+			//std::cout << std::endl;
+		}
 	}
 
 	backwardSubstituteKernel<<< numBlocks, numThreads >>>(d);
@@ -65,15 +93,22 @@ void testHSonly()
 	cudaMemcpy( V, d.V, n * sizeof(double), cudaMemcpyDeviceToHost );
 	cudaMemcpy( VMid, d.VMid, n * sizeof(double), cudaMemcpyDeviceToHost );
 
-	std::cout << "V" << std::endl;
-	for( i = 0 ; i < n ; i++ )
-		std::cout << V[i] << " ";
+	//std::cout << "V" << std::endl;
+	for( i = 0 ; i < n ; i++ ) {
+		//std::cout << V[i] << " ";
+	}
 
-	std::cout << std::endl << "VMid" << std::endl;
-	for( i = 0 ; i < n ; i++ )
-		std::cout << VMid[i] << " ";
+	//std::cout << std::endl << "VMid" << std::endl;
+	for( i = 0 ; i < n ; i++ ) {
+		//std::cout << VMid[i] << " ";
+	}
 
-	std::cout << std::endl;
+	ASSERT( isClose( VMid[0], 1.0, tolerance ), "Error: testHSonly, VMid[0]");
+	ASSERT( isClose( VMid[1], 2.0, tolerance ), "Error: testHSonly, VMid[1]");
+	ASSERT( isClose( VMid[2], 3.0, tolerance ), "Error: testHSonly, VMid[2]");
+	ASSERT( isClose( VMid[3], 4.0, tolerance ), "Error: testHSonly, VMid[3]");
+
+	std::cout << ".";
 }
 
 void testYcompt()
@@ -125,10 +160,10 @@ void testYcompt()
 	testOperand[6] = d.HS + 8;
 	testOperand[7] = d.VMid + 2;
 
-	std::cout << "Addresses:" << std::endl;
-	std::cout << d.HS << " " << testOperand[6] << " " << d.HJ << std::endl;
-	std::cout << "Operand address: " << d.operand << std::endl;
-	std::cout << "V and VMid addresses: " << d.V << " " << d.VMid << std::endl;
+	//std::cout << "Addresses:" << std::endl;
+	//std::cout << d.HS << " " << testOperand[6] << " " << d.HJ << std::endl;
+	//std::cout << "Operand address: " << d.operand << std::endl;
+	//std::cout << "V and VMid addresses: " << d.V << " " << d.VMid << std::endl;
 
 	// Copy data into device.
 	cudaMemcpy( d.HS, testHS, 4 * n * sizeof(double), cudaMemcpyHostToDevice );
@@ -152,20 +187,21 @@ void testYcompt()
 
 	// Check the matrix after forward eliminate
 	cudaMemcpy( testHS, d.HS, 4 * n * sizeof(double), cudaMemcpyDeviceToHost );
-	std::cout << "HS after forward eliminate" << std::endl;
+	//std::cout << "HS after forward eliminate" << std::endl;
 	int i;
 	for( i = 0 ; i < 4 * n ; i++ ) {
-		std::cout << testHS[i] << " ";
-		if( i % 4 == 3 )
-			std::cout << std::endl;
+		//std::cout << testHS[i] << " ";
+		if( i % 4 == 3 ) {
+			//std::cout << std::endl;
+		}
 	}
 	cudaMemcpy( testHJ, d.HJ, n * (n-1) * sizeof(double),
 				cudaMemcpyDeviceToHost );
-	std::cout << "HJ after forward eliminate" << std::endl;
+	//std::cout << "HJ after forward eliminate" << std::endl;
 	for( i = 0 ; i < n * (n-1) ; i++ ) {
-		std::cout << testHJ[i] << " ";
+		//std::cout << testHJ[i] << " ";
 	}
-	std::cout << endl;
+	//std::cout << endl;
 
 	backwardSubstituteKernel<<< numBlocks, numThreads, 0, stream >>>(d);
 
@@ -173,15 +209,21 @@ void testYcompt()
 	cudaMemcpy( V, d.V, n * sizeof(double), cudaMemcpyDeviceToHost );
 	cudaMemcpy( VMid, d.VMid, n * sizeof(double), cudaMemcpyDeviceToHost );
 
-	std::cout << "V" << std::endl;
-	for( i = 0 ; i < n ; i++ )
-		std::cout << V[i] << " ";
+	//std::cout << "V" << std::endl;
+	for( i = 0 ; i < n ; i++ ) {
+		//std::cout << V[i] << " ";
+	}
 
-	std::cout << std::endl << "VMid" << std::endl;
-	for( i = 0 ; i < n ; i++ )
-		std::cout << VMid[i] << " ";
+	//std::cout << std::endl << "VMid" << std::endl;
+	for( i = 0 ; i < n ; i++ ) {
+		//std::cout << VMid[i] << " ";
+	}
 
-	std::cout << std::endl;
+	ASSERT( isClose( VMid[0], 1.0, tolerance ), "Error: testYcompt, VMid[0]");
+	ASSERT( isClose( VMid[1], 2.0, tolerance ), "Error: testYcompt, VMid[1]");
+	ASSERT( isClose( VMid[2], 3.0, tolerance ), "Error: testYcompt, VMid[2]");
+
+	std::cout << ".";
 }
 
 void testRank3()
@@ -284,10 +326,10 @@ void testRank3()
 									d.VMid + 3	// 5
 								 };
 
-	std::cout << "Addresses:" << std::endl;
-	std::cout << "HS: " << d.HS << " " << "HJ: " << d.HJ << std::endl;
-	std::cout << "Operand address: " << d.operand << std::endl;
-	std::cout << "V and VMid addresses: " << d.V << " " << d.VMid << std::endl;
+	//std::cout << "Addresses:" << std::endl;
+	//std::cout << "HS: " << d.HS << " " << "HJ: " << d.HJ << std::endl;
+	//std::cout << "Operand address: " << d.operand << std::endl;
+	//std::cout << "V and VMid addresses: " << d.V << " " << d.VMid << std::endl;
 
 	// Copy data into device.
 	cudaMemcpy( d.HS, testHS, 4 * n * sizeof(double), cudaMemcpyHostToDevice );
@@ -311,20 +353,21 @@ void testRank3()
 
 	// Check the matrix after forward eliminate
 	cudaMemcpy( testHS, d.HS, 4 * n * sizeof(double), cudaMemcpyDeviceToHost );
-	std::cout << "HS after forward eliminate" << std::endl;
+	//std::cout << "HS after forward eliminate" << std::endl;
 	int i;
 	for( i = 0 ; i < 4 * n ; i++ ) {
-		std::cout << testHS[i] << " ";
-		if( i % 4 == 3 )
-			std::cout << std::endl;
+		//std::cout << testHS[i] << " ";
+		if( i % 4 == 3 ) {
+			//std::cout << std::endl;
+		}
 	}
 	cudaMemcpy( testHJ, d.HJ, n * (n-1) * sizeof(double),
 				cudaMemcpyDeviceToHost );
-	std::cout << "HJ after forward eliminate" << std::endl;
+	//std::cout << "HJ after forward eliminate" << std::endl;
 	for( i = 0 ; i < n * (n-1) ; i++ ) {
-		std::cout << testHJ[i] << " ";
+		//std::cout << testHJ[i] << " ";
 	}
-	std::cout << endl;
+	//std::cout << endl;
 
 	backwardSubstituteKernel<<< numBlocks, numThreads, 0, stream >>>(d);
 
@@ -332,22 +375,31 @@ void testRank3()
 	cudaMemcpy( V, d.V, n * sizeof(double), cudaMemcpyDeviceToHost );
 	cudaMemcpy( VMid, d.VMid, n * sizeof(double), cudaMemcpyDeviceToHost );
 
-	std::cout << "V" << std::endl;
-	for( i = 0 ; i < n ; i++ )
-		std::cout << V[i] << " ";
+	//std::cout << "V" << std::endl;
+	for( i = 0 ; i < n ; i++ ) {
+		//std::cout << V[i] << " ";
+	}
 
-	std::cout << std::endl << "VMid" << std::endl;
-	for( i = 0 ; i < n ; i++ )
-		std::cout << VMid[i] << " ";
+	//std::cout << std::endl << "VMid" << std::endl;
+	for( i = 0 ; i < n ; i++ ) {
+		//std::cout << VMid[i] << " ";
+	}
 
-	std::cout << std::endl;
+	ASSERT( isClose( VMid[0], 1.0, tolerance ), "Error: testRank3, VMid[0]");
+	ASSERT( isClose( VMid[1], 2.0, tolerance ), "Error: testRank3, VMid[1]");
+	ASSERT( isClose( VMid[2], 3.0, tolerance ), "Error: testRank3, VMid[2]");
+	ASSERT( isClose( VMid[3], 4.0, tolerance ), "Error: testRank3, VMid[3]");
+
+	std::cout << ".";
 }
 
 void testGpuKernels()
 {
+	std::cout << "Testing GpuKernels: " << std::flush;
 	testHSonly();
 	testYcompt();
 	testRank3();
+	std::cout << std::endl;
 }
 
 #endif // DO_UNIT_TESTS

@@ -30,6 +30,8 @@
 }
 
 // Constants needed for active channels
+// Note: cuda constant memory is implicitly static. Better to make it
+// explicitly known here.
 __constant__ static int INSTANT_X;
 __constant__ static int INSTANT_Y;
 __constant__ static int INSTANT_Z;
@@ -52,7 +54,7 @@ __global__ void updateMatrixKernel(GpuDataStruct ds) {
 	double *ihs = ds.HS;
 	double *iv  = ds.V;
 	
-	printf("In gpu: %lf %lf\n", ihs[0], ihs[3]);
+	//printf("In gpu: %lf %lf\n", ihs[0], ihs[3]);
 
 	CompartmentStruct *ic;
 	for ( ic = ds.compartment ; ic < ds.compartment + ds.nCompts ; ++ic ) {
@@ -168,7 +170,7 @@ __global__ void backwardSubstituteKernel(GpuDataStruct ds) {
 	double **ibop	 = ds.backOperand + ds.backOperandSize - 1;
 	JunctionStruct *junction = ds.junction + ds.junctionSize - 1;
 	
-	printf("In gpu: %lf %lf\n", ihs[-3], ihs[0]);
+	//printf("In gpu: %lf %lf\n", ihs[-3], ihs[0]);
 
 	*ivmid = *ihs / *( ihs - 3 );
 	*iv = 2 * *ivmid - *iv;
@@ -229,7 +231,7 @@ __global__ void backwardSubstituteKernel(GpuDataStruct ds) {
 		--ic, --ivmid, --iv, ihs -= 4;
 	}
 
-	printf("V in gpu: %lf %lf\n", ds.VMid[0], ds.V[0]);
+	//printf("V in gpu: %lf %lf\n", ds.VMid[0], ds.V[0]);
 }
 
 __device__ void findRow(GpuLookupTable table, double value, GpuLookupRow &row)
