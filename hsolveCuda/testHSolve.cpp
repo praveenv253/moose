@@ -20,12 +20,14 @@ extern void testHSolvePassive(); // Defined in HSolvePassive.cpp
 extern void testHSolveUtils(); // Defined in HSolveUtils.cpp
 extern void testGpuInterface(); // Defined in testGpuInterface.cpp
 extern void testSetupWorking(); // Defined in testGpuInterface.cpp
+extern void testGpuKernels(); // Defined in testGpuKernels.cu
 
 void testHSolve()
 {
 	testHSolveUtils();
 	testHinesMatrix();
 	testHSolvePassive();
+	testGpuKernels();
 	testGpuInterface();
 	testSetupWorking();
 }

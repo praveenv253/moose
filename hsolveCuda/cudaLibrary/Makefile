@@ -13,13 +13,16 @@ NVCC_FLAGS = --compile -G -g -O0 -Xcompiler -fPIC -x cu -arch=sm_20
 
 ifeq ($(BUILD),debug)
 NVCC_FLAGS += -DDO_UNIT_TESTS
+CU_SRCS += testGpuKernels.cu
+OBJS += testGpuKernels.o
 endif
 
 TARGET_FLAGS = -shared -link
 
-ifeq ($(BUILD),debug)
-TARGET_FLAGS += -DDO_UNIT_TESTS
-endif
+# Preprocessing is already over. This should not be needed.
+#ifeq ($(BUILD),debug)
+#TARGET_FLAGS += -DDO_UNIT_TESTS
+#endif
 
 all: libmooseCudaLibrary.so
 
@@ -41,6 +44,9 @@ GpuInterface.o: GpuInterface.cu GpuInterface.h GpuKernels.h $(HSOLVE_HEADERS)
 GpuKernels.o: GpuKernels.cu GpuKernels.h ../HSolveStruct.h ../HinesMatrix.h
 	nvcc $(NVCC_FLAGS) -o GpuKernels.o GpuKernels.cu
 
+testGpuKernels.o: testGpuKernels.h testGpuKernels.cu $(HSOLVE_HEADERS)
+	nvcc $(NVCC_FLAGS) -o testGpuKernels.o testGpuKernels.cu
+
 #%.o: %.cu
 	#nvcc -G -g -O0 -Xcompiler -fPIC -odir "" -M -o "$(@:%.o=%.d)" "$<"
 	#nvcc --compile -G -O0 -Xcompiler -fPIC -g -x cu -o  "$@" "$<"
@@ -48,6 +54,6 @@ GpuKernels.o: GpuKernels.cu GpuKernels.h ../HSolveStruct.h ../HinesMatrix.h
 clean:
 	rm -rf $(CU_DEPS) $(OBJS) libmooseCudaLibrary.so
 
-test: testGpuKernels.cu libmooseCudaLibrary.so
-	LD_LIBRARY_PATH="$$LD_LIBRARY_PATH:./" nvcc -g -G -lcuda -lcudart -L./ \
-		-lmooseCudaLibrary -o testGpuKernels testGpuKernels.cu -arch=sm_20
+#test: testGpuKernels.cu libmooseCudaLibrary.so
+#	LD_LIBRARY_PATH="$$LD_LIBRARY_PATH:./" nvcc -g -G -lcuda -lcudart -L./ \
+#		-lmooseCudaLibrary -o testGpuKernels testGpuKernels.cu -arch=sm_20

@@ -1,3 +1,6 @@
+#ifdef DO_UNIT_TESTS
+
+#include "testGpuKernels.h"
 #include "GpuInterface.h"
 #include "GpuKernels.h"
 
@@ -340,10 +343,11 @@ void testRank3()
 	std::cout << std::endl;
 }
 
-int main()
+void testGpuKernels()
 {
 	testHSonly();
 	testYcompt();
 	testRank3();
-	return 0;
 }
+
+#endif // DO_UNIT_TESTS
